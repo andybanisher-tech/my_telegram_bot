@@ -39,23 +39,18 @@ KEYWORDS = {
         "мои подписки", "отписаться", "управление подписками"
     ],
     "help": [
-        "помощь", "что умеешь", "как пользоваться", "справка"
+        "помощь", "что умеешь", "как пользоваться", "справка",
+        "привет", "здравствуй", "здравствуйте", "что ты можешь"
     ]
 }
 
 def get_intent_by_keywords(text: str) -> Optional[str]:
-    """
-    Проверяет, есть ли в тексте ключевые слова.
-    Сначала ищет вхождение фразы как подстроки,
-    затем — вхождение всех слов фразы как отдельных слов.
-    """
     text_lower = text.lower()
     words = set(text_lower.split())
     for intent, phrases in KEYWORDS.items():
         for phrase in phrases:
             if phrase in text_lower:
                 return intent
-            # Проверяем, все ли слова из фразы присутствуют в запросе
             phrase_words = set(phrase.split())
             if phrase_words.issubset(words):
                 return intent
@@ -77,20 +72,21 @@ def load_llm_model():
 def get_intent_by_llm(text: str, llm) -> Optional[str]:
     if not llm:
         return None
-    prompt = f"""Ты — классификатор намерений пользователя в телеграм-боте. 
-Определи, какое из действий хочет выполнить пользователь. 
-Варианты: balance (баланс баллов), history (история баллов), companies (мои компании), banners (текущие акции), bonus (реферальная программа), subscribe (подписаться на новости), subscriptions (мои подписки), help (помощь). 
-Если ни одно не подходит, напиши ровно одно слово: unknown.
+    prompt = f"""Определи, какое действие хочет выполнить пользователь.
+Варианты ответов (только одно слово): balance, history, companies, banners, bonus, subscribe, subscriptions, help.
+Если ни одно не подходит, ответь 'unknown'.
 Пользователь написал: {text}
-Твой ответ (только одно слово из списка или unknown):"""
+Ответ:"""
     try:
         response = llm(prompt, max_tokens=10, stop=["\n"], temperature=0.0)
-        answer = response["choices"][0]["text"].strip().lower()
-        # Очистка от возможных знаков препинания
-        answer = answer.strip('.,!?;:')
-        if answer in INTENTS:
-            return answer
+        raw = response["choices"][0]["text"].strip().lower()
+        # Очищаем от возможных знаков препинания
+        raw = raw.split()[0] if raw else ""
+        if raw in INTENTS:
+            return raw
         else:
+            # Логируем, что модель вернула неподходящий ответ
+            logger.info(f"LLM вернул неподходящий интент: {raw}")
             return None
     except Exception as e:
         logger.error(f"Ошибка при вызове LLM: {e}")
