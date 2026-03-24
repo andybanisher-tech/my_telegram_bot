@@ -58,7 +58,7 @@ async def show_companies(message: types.Message, state: FSMContext):
     else:
         await process_companies_loading(user_id, phone, state, message)
 
-async def show_banners(message: types.Message, state: FSMContext):
+async def show_banners(message: types.Message, state: FSMContext, brand: str = None):
     user_id = message.from_user.id
     companies = db.get_user_companies(user_id)
     if not companies:
@@ -68,8 +68,10 @@ async def show_banners(message: types.Message, state: FSMContext):
         )
         return
     if len(companies) == 1:
-        await fetch_and_show_banners(message, user_id, companies[0]['code'])
+        await fetch_and_show_banners(message, user_id, companies[0]['code'], brand)
     else:
+        # Если несколько компаний, нужно запросить компанию и передать бренд
+        await state.update_data(brand_filter=brand)
         await state.set_state(states.BannersProcess.choosing_company)
         await message.answer(
             "У вас несколько компаний. Выберите, для какой показать акции:",

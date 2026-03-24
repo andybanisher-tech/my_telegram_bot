@@ -1,6 +1,6 @@
 import os
 import logging
-from typing import Optional
+from typing import Optional, Tuple
 from llama_cpp import Llama
 
 logger = logging.getLogger(__name__)
@@ -49,7 +49,6 @@ KEYWORDS = {
 def get_intent_by_keywords(text: str) -> Optional[str]:
     text_lower = text.lower()
     words = set(text_lower.split())
-    # Проверяем в порядке приоритета (история сначала)
     priority_order = ["history", "balance", "companies", "banners", "bonus", "subscribe", "subscriptions", "help"]
     for intent in priority_order:
         for phrase in KEYWORDS.get(intent, []):
@@ -99,3 +98,21 @@ def get_intent(text: str, llm) -> Optional[str]:
     if intent:
         return intent
     return get_intent_by_llm(text, llm)
+
+def extract_brand(text: str, llm) -> Optional[str]:
+    """Извлекает название бренда из запроса, если оно есть."""
+    if not llm:
+        return None
+    prompt = f"""Извлеки название бренда из запроса пользователя, если оно есть.
+Верни только название бренда на русском или английском, одним словом. Если бренд не указан, ответь 'none'.
+Запрос: {text}
+Бренд:"""
+    try:
+        response = llm(prompt, max_tokens=20, stop=["\n"], temperature=0.0)
+        brand = response["choices"][0]["text"].strip().lower()
+        if brand == "none" or not brand:
+            return None
+        return brand
+    except Exception as e:
+        logger.error(f"Ошибка при извлечении бренда: {e}")
+        return None

@@ -1,6 +1,6 @@
 from aiogram import Router, types, F
 from aiogram.fsm.context import FSMContext
-from intent_classifier import get_intent, load_llm_model
+from intent_classifier import get_intent, load_llm_model, extract_brand
 import logging
 
 from . import main_menu
@@ -31,7 +31,12 @@ async def handle_text(message: types.Message, state: FSMContext):
     elif intent == "companies":
         await main_menu.show_companies(message, state)
     elif intent == "banners":
-        await main_menu.show_banners(message, state)
+        brand = extract_brand(text, llm)
+        if brand:
+            logger.info(f"Извлечён бренд: {brand} для текста: {text}")
+        else:
+            logger.info(f"Бренд не найден для текста: {text}")
+        await main_menu.show_banners(message, state, brand)
     elif intent == "bonus":
         await main_menu.show_bonus(message, state)
     elif intent == "subscribe":
