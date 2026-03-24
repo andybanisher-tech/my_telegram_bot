@@ -77,15 +77,19 @@ def load_llm_model():
 def get_intent_by_llm(text: str, llm) -> Optional[str]:
     if not llm:
         return None
-    prompt = f"""Определи, какое действие хочет выполнить пользователь. Варианты: {', '.join(INTENTS.keys())}.
-Если ни одно не подходит, ответь 'unknown'.
+    prompt = f"""Ты — классификатор намерений пользователя в телеграм-боте. 
+Определи, какое из действий хочет выполнить пользователь. 
+Варианты: balance (баланс баллов), history (история баллов), companies (мои компании), banners (текущие акции), bonus (реферальная программа), subscribe (подписаться на новости), subscriptions (мои подписки), help (помощь). 
+Если ни одно не подходит, напиши ровно одно слово: unknown.
 Пользователь написал: {text}
-Интент:"""
+Твой ответ (только одно слово из списка или unknown):"""
     try:
         response = llm(prompt, max_tokens=10, stop=["\n"], temperature=0.0)
-        intent = response["choices"][0]["text"].strip().lower()
-        if intent in INTENTS:
-            return intent
+        answer = response["choices"][0]["text"].strip().lower()
+        # Очистка от возможных знаков препинания
+        answer = answer.strip('.,!?;:')
+        if answer in INTENTS:
+            return answer
         else:
             return None
     except Exception as e:
