@@ -17,11 +17,13 @@ INTENTS = {
 }
 
 KEYWORDS = {
+    "history": [
+        "история", "изменение баллов", "операции", "движение баллов",
+        "за что начислены баллы", "почему начислены баллы",
+        "начислены баллы", "списание баллов", "зачисление баллов"
+    ],
     "balance": [
         "баланс", "баллы", "баллов", "сколько баллов", "бонусы", "бонусный счет"
-    ],
-    "history": [
-        "история", "изменение баллов", "операции", "движение баллов"
     ],
     "companies": [
         "мои компании", "какие компании", "организации", "фирмы"
@@ -40,15 +42,17 @@ KEYWORDS = {
     ],
     "help": [
         "помощь", "что умеешь", "как пользоваться", "справка",
-        "привет", "здравствуй", "здравствуйте", "что ты можешь"
+        "привет", "здравствуй", "что ты можешь"
     ]
 }
 
 def get_intent_by_keywords(text: str) -> Optional[str]:
     text_lower = text.lower()
     words = set(text_lower.split())
-    for intent, phrases in KEYWORDS.items():
-        for phrase in phrases:
+    # Проверяем в порядке приоритета (история сначала)
+    priority_order = ["history", "balance", "companies", "banners", "bonus", "subscribe", "subscriptions", "help"]
+    for intent in priority_order:
+        for phrase in KEYWORDS.get(intent, []):
             if phrase in text_lower:
                 return intent
             phrase_words = set(phrase.split())
@@ -74,18 +78,16 @@ def get_intent_by_llm(text: str, llm) -> Optional[str]:
         return None
     prompt = f"""Определи, какое действие хочет выполнить пользователь.
 Варианты ответов (только одно слово): balance, history, companies, banners, bonus, subscribe, subscriptions, help.
-Если ни одно не подходит, ответь 'unknown'.
+Если ни одно не подходит, попробуй уточнить.
 Пользователь написал: {text}
 Ответ:"""
     try:
         response = llm(prompt, max_tokens=10, stop=["\n"], temperature=0.0)
         raw = response["choices"][0]["text"].strip().lower()
-        # Очищаем от возможных знаков препинания
         raw = raw.split()[0] if raw else ""
         if raw in INTENTS:
             return raw
         else:
-            # Логируем, что модель вернула неподходящий ответ
             logger.info(f"LLM вернул неподходящий интент: {raw}")
             return None
     except Exception as e:
