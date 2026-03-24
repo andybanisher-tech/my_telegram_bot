@@ -100,31 +100,27 @@ def get_intent(text: str, llm) -> Optional[str]:
     return get_intent_by_llm(text, llm)
 
 def extract_brand(text: str, llm) -> Optional[str]:
-    """Извлекает название бренда из запроса, если оно есть, используя только LLM."""
+    """Извлекает название бренда из запроса, используя LLM."""
     if not llm:
+        logger.warning("LLM недоступна, бренд не будет извлечён")
         return None
-    prompt = f"""Ты — помощник, который извлекает название бренда из запроса пользователя.
-Пользователь может писать название бренда как по-английски (Matrix), так и транслитом (матрикс), с ошибками, сокращениями.
-Твоя задача: вернуть название бренда на английском языке, в том виде, как оно обычно пишется в каталоге.
-Если бренд не упомянут, верни 'none'.
+    prompt = f"""Извлеки название бренда из запроса. Если бренд не упомянут, верни 'none'.
 Примеры:
-Пользователь: покажи акции только по матрикс
-Ответ: Matrix
-Пользователь: акции карал
-Ответ: Kaaral
-Пользователь: что по скидкам на Loreal
-Ответ: L'Oreal
-Пользователь: покажи акции
-Ответ: none
-
-Теперь пользователь: {text}
+покажи акции только по матрикс -> Matrix
+акции карал -> Kaaral
+скидки на Loreal -> L'Oreal
+покажи акции -> none
+Запрос: {text}
 Ответ:"""
     try:
         response = llm(prompt, max_tokens=20, stop=["\n"], temperature=0.0)
-        brand = response["choices"][0]["text"].strip()
-        if brand.lower() == "none" or not brand:
+        raw = response["choices"][0]["text"].strip()
+        logger.info(f"LLM ответ для бренда: '{raw}'")
+        if raw.lower() == "none" or not raw:
             return None
-        return brand
+        # Убираем возможные знаки препинания в конце
+        raw = raw.rstrip('.,;:!?')
+        return raw
     except Exception as e:
         logger.error(f"Ошибка при извлечении бренда: {e}")
         return None
