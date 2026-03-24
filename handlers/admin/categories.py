@@ -1,3 +1,4 @@
+import logging
 from aiogram import Router, types
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
@@ -7,8 +8,9 @@ from keyboards.admin import (
     get_categories_list_keyboard
 )
 from states import states
-from handlers.main_menu import is_admin
+from utils.helpers import is_admin  # правильный импорт
 
+logger = logging.getLogger(__name__)
 router = Router()
 
 @router.message(Command("categories"))
@@ -22,7 +24,6 @@ async def cmd_manage_categories(message: types.Message, state: FSMContext):
         reply_markup=get_categories_management_keyboard()
     )
 
-# Добавление категории
 @router.callback_query(lambda c: c.data == "cat_add", states.CategoryManagement.choosing_action)
 async def category_add_start(callback: types.CallbackQuery, state: FSMContext):
     if not is_admin(callback.from_user.id):
@@ -57,7 +58,6 @@ async def category_add_finish(message: types.Message, state: FSMContext):
         reply_markup=get_categories_management_keyboard()
     )
 
-# Переименование категории
 @router.callback_query(lambda c: c.data == "cat_rename", states.CategoryManagement.choosing_action)
 async def category_rename_start(callback: types.CallbackQuery, state: FSMContext):
     if not is_admin(callback.from_user.id):
@@ -124,7 +124,6 @@ async def category_rename_finish(message: types.Message, state: FSMContext):
         reply_markup=get_categories_management_keyboard()
     )
 
-# Удаление категории
 @router.callback_query(lambda c: c.data == "cat_delete", states.CategoryManagement.choosing_action)
 async def category_delete_start(callback: types.CallbackQuery, state: FSMContext):
     if not is_admin(callback.from_user.id):
@@ -165,7 +164,6 @@ async def category_delete_confirm(callback: types.CallbackQuery, state: FSMConte
         reply_markup=get_categories_management_keyboard()
     )
 
-# Возврат назад
 @router.callback_query(lambda c: c.data == "cat_back")
 async def categories_back(callback: types.CallbackQuery, state: FSMContext):
     if not is_admin(callback.from_user.id):

@@ -10,10 +10,10 @@ from keyboards.admin import (
     get_admins_list_keyboard
 )
 from states import states
-from handlers.main_menu import is_admin
+from utils.helpers import is_admin  # правильный импорт
 
-router = Router()
 logger = logging.getLogger(__name__)
+router = Router()
 
 @router.message(Command("manage_admins"))
 async def cmd_manage_admins(message: types.Message, state: FSMContext):

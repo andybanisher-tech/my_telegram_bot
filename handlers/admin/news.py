@@ -1,15 +1,16 @@
 import asyncio
+import logging
 from aiogram import Router, types, F
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
+from aiogram.types import InputMediaPhoto
 import database as db
 from keyboards.admin import get_categories_keyboard, get_preview_keyboard
 from states import states
-from handlers.main_menu import is_admin
-import logging
+from utils.helpers import is_admin  # правильный импорт
 
-router = Router()
 logger = logging.getLogger(__name__)
+router = Router()
 
 @router.message(Command("admin"))
 async def cmd_admin(message: types.Message, state: FSMContext):
@@ -148,7 +149,6 @@ async def send_news(callback: types.CallbackQuery, state: FSMContext):
                         parse_mode="Markdown"
                     )
                 else:
-                    from aiogram.types import InputMediaPhoto
                     media = []
                     for i, file_id in enumerate(photos):
                         if i == 0:

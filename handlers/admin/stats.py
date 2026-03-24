@@ -1,14 +1,13 @@
 import sqlite3
 from aiogram import Router, types
 from aiogram.filters import Command
-from aiogram.fsm.context import FSMContext
 import database as db
-from handlers.main_menu import is_admin
+from utils.helpers import is_admin  # правильный импорт
 
 router = Router()
 
 @router.message(Command("stats"))
-async def cmd_stats(message: types.Message, state: FSMContext):
+async def cmd_stats(message: types.Message):
     if not is_admin(message.from_user.id):
         await message.answer("⛔ Доступ запрещён.")
         return
