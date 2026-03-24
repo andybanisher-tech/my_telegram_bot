@@ -9,10 +9,12 @@ from utils.helpers import is_manager
 router = Router()
 logger = logging.getLogger(__name__)
 
+# Загружаем модель один раз при старте
 llm = load_llm_model()
 
 @router.message(F.text)
 async def handle_text(message: types.Message, state: FSMContext):
+    global llm
     user_id = message.from_user.id
     text = message.text.strip()
 
@@ -20,6 +22,11 @@ async def handle_text(message: types.Message, state: FSMContext):
         return
     if text.startswith('/'):
         return
+
+    # Если модель не загружена, пробуем перезагрузить
+    if llm is None:
+        logger.warning("Модель не загружена, попытка перезагрузить...")
+        llm = load_llm_model()
 
     intent = get_intent(text, llm)
     logger.info(f"Определён интент: {intent} для текста: {text}")
@@ -31,7 +38,7 @@ async def handle_text(message: types.Message, state: FSMContext):
     elif intent == "companies":
         await main_menu.show_companies(message, state)
     elif intent == "banners":
-        brand = extract_brand(text, llm)
+        brand = extract_brand(text, llm) if llm else None
         if brand:
             logger.info(f"Извлечён бренд: {brand} для текста: {text}")
         else:

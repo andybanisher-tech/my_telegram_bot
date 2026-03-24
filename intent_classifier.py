@@ -118,7 +118,6 @@ def extract_brand(text: str, llm) -> Optional[str]:
         logger.info(f"LLM ответ для бренда: '{raw}'")
         if raw.lower() == "none" or not raw:
             return None
-        # Убираем возможные знаки препинания в конце
         raw = raw.rstrip('.,;:!?')
         return raw
     except Exception as e:
