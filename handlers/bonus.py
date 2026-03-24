@@ -6,7 +6,7 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 import database as db
 import bonus_client
-from keyboards.common import get_main_keyboard
+from keyboards.common import get_main_keyboard, get_bonus_submenu_keyboard
 from utils.helpers import decline_ball
 import logging
 
@@ -16,11 +16,9 @@ logger = logging.getLogger(__name__)
 class BonusProcess(StatesGroup):
     choosing_company = State()
 
-def get_lk_keyboard():
-    """Клавиатура со ссылкой на личный кабинет."""
-    builder = InlineKeyboardBuilder()
-    builder.button(text="🔗 Подробнее в личном кабинете", url="https://stalker-co.ru/personal/internet/")
-    return builder.as_markup()
+async def show_bonus_submenu(message: types.Message, state: FSMContext):
+    """Показывает подменю реферальной программы."""
+    await message.answer("Выберите раздел:", reply_markup=get_bonus_submenu_keyboard())
 
 async def show_company_selection(user_id: int, message: types.Message, action: str):
     companies = db.get_user_companies(user_id)
@@ -32,7 +30,7 @@ async def show_company_selection(user_id: int, message: types.Message, action: s
     builder = InlineKeyboardBuilder()
     for company in companies:
         builder.button(text=company['name'], callback_data=f"bonus_comp_{action}_{company['code']}")
-    builder.button(text="◀️ Отмена", callback_data="back_to_main")
+    builder.button(text="◀️ Отмена", callback_data="bonus_back_to_main")
     builder.adjust(1)
     await message.answer("Выберите компанию:", reply_markup=builder.as_markup())
     return None
@@ -50,7 +48,7 @@ async def fetch_and_show_balance(message: types.Message, user_id: int, company_c
         await message.answer(text, parse_mode="Markdown")
     else:
         await message.answer("❌ Не удалось получить баланс. Попробуйте позже.")
-    await message.answer("Выберите действие:", reply_markup=get_main_keyboard(user_id))
+    await show_bonus_submenu(message, None)
 
 async def fetch_and_show_history(message: types.Message, user_id: int, company_code: str):
     await message.answer("⏳ Запрашиваем историю...")
@@ -58,11 +56,7 @@ async def fetch_and_show_history(message: types.Message, user_id: int, company_c
     if lines is None:
         await message.answer("❌ Не удалось получить историю. Попробуйте позже.")
     elif not lines:
-        # Если история пуста, показываем сообщение и кнопку на ЛК
-        await message.answer(
-            "История изменений баллов пуста.",
-            reply_markup=get_lk_keyboard()
-        )
+        await message.answer("История изменений баллов пуста.")
     else:
         text = "📜 *История изменений баллов:*\n\n"
         for item in lines:
@@ -89,15 +83,11 @@ async def fetch_and_show_history(message: types.Message, user_id: int, company_c
                     current += line
             if current:
                 parts.append(current)
-            for i, part in enumerate(parts):
-                # К последней части добавляем кнопку
-                if i == len(parts) - 1:
-                    await message.answer(part, parse_mode="Markdown", reply_markup=get_lk_keyboard())
-                else:
-                    await message.answer(part, parse_mode="Markdown")
+            for part in parts:
+                await message.answer(part, parse_mode="Markdown")
         else:
-            await message.answer(text, parse_mode="Markdown", reply_markup=get_lk_keyboard())
-    await message.answer("Выберите действие:", reply_markup=get_main_keyboard(user_id))
+            await message.answer(text, parse_mode="Markdown")
+    await show_bonus_submenu(message, None)
 
 @router.message(F.text == "💰 Баланс баллов")
 async def bonus_balance_start(message: types.Message, state: FSMContext):
@@ -127,9 +117,9 @@ async def bonus_history_company_chosen(callback: types.CallbackQuery, state: FSM
     await callback.answer()
     await fetch_and_show_history(callback.message, callback.from_user.id, company_code)
 
-@router.callback_query(lambda c: c.data == "back_to_main")
-async def back_to_main_callback(callback: types.CallbackQuery, state: FSMContext):
+@router.callback_query(lambda c: c.data == "bonus_back_to_main")
+async def bonus_back_to_main(callback: types.CallbackQuery, state: FSMContext):
     await state.clear()
     await callback.message.delete()
-    await callback.message.answer("Главное меню:", reply_markup=get_main_keyboard(callback.from_user.id))
+    await show_bonus_submenu(callback.message, state)
     await callback.answer()
