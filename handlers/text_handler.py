@@ -3,13 +3,12 @@ from aiogram.fsm.context import FSMContext
 from intent_classifier import get_intent, load_llm_model
 import logging
 
-from . import bonus, main_menu, banners, subscriptions, companies, start
+from . import main_menu
 from utils.helpers import is_manager
 
 router = Router()
 logger = logging.getLogger(__name__)
 
-# Загружаем модель один раз
 llm = load_llm_model()
 
 @router.message(F.text)
@@ -26,39 +25,21 @@ async def handle_text(message: types.Message, state: FSMContext):
     logger.info(f"Определён интент: {intent} для текста: {text}")
 
     if intent == "balance":
-        await bonus.bonus_balance_start(message, state)
+        await main_menu.show_balance(message, state)
     elif intent == "history":
-        await bonus.bonus_history_start(message, state)
+        await main_menu.show_history(message, state)
     elif intent == "companies":
-        original_text = message.text
-        message.text = "🏢 Мои компании"
-        await main_menu.handle_main_menu(message, state)
-        message.text = original_text
+        await main_menu.show_companies(message, state)
     elif intent == "banners":
-        original_text = message.text
-        message.text = "🎁 Текущие акции"
-        await main_menu.handle_main_menu(message, state)
-        message.text = original_text
+        await main_menu.show_banners(message, state)
     elif intent == "bonus":
-        original_text = message.text
-        message.text = "🎁 Реферальная программа"
-        await main_menu.handle_main_menu(message, state)
-        message.text = original_text
+        await main_menu.show_bonus(message, state)
     elif intent == "subscribe":
-        original_text = message.text
-        message.text = "📰 Подписаться на новости"
-        await main_menu.handle_main_menu(message, state)
-        message.text = original_text
+        await main_menu.show_subscribe(message, state)
     elif intent == "subscriptions":
-        original_text = message.text
-        message.text = "📋 Мои подписки"
-        await main_menu.handle_main_menu(message, state)
-        message.text = original_text
+        await main_menu.show_subscriptions(message, state)
     elif intent == "help":
-        original_text = message.text
-        message.text = "ℹ️ Помощь"
-        await main_menu.handle_main_menu(message, state)
-        message.text = original_text
+        await main_menu.show_help(message, state)
     else:
         await message.answer(
             "Извините, я не понял ваш запрос. Попробуйте использовать кнопки меню или введите ключевые слова: "
