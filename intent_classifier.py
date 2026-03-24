@@ -78,7 +78,7 @@ def get_intent_by_llm(text: str, llm) -> Optional[str]:
         return None
     prompt = f"""Определи, какое действие хочет выполнить пользователь.
 Варианты ответов (только одно слово): balance, history, companies, banners, bonus, subscribe, subscriptions, help.
-Если ни одно не подходит, попробуй уточнить.
+Если ни одно не подходит, ответь 'unknown'.
 Пользователь написал: {text}
 Ответ:"""
     try:

@@ -38,9 +38,12 @@ async def show_companies(message: types.Message, state: FSMContext):
     if not phone:
         await state.set_state(states.CompanyProcess.waiting_for_phone)
         await message.answer(
-            "Для просмотра компаний поделись своим номером телефона.",
-            reply_markup=get_phone_keyboard()
-        )
+    "🔐 *Для доступа к информации о компаниях требуется подтверждение номера телефона.*\n\n"
+    "Нажмите на кнопку ниже, чтобы поделиться номером, который вы использовали при регистрации в нашем магазине.\n"
+    "Telegram автоматически подтвердит, что номер ваш — никаких SMS не потребуется.",
+    parse_mode="Markdown",
+    reply_markup=get_phone_keyboard()
+)
         return
     companies = db.get_user_companies(user_id)
     if companies:
