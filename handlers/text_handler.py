@@ -9,7 +9,7 @@ from utils.helpers import is_manager
 router = Router()
 logger = logging.getLogger(__name__)
 
-# Загружаем модель один раз при старте (может быть None, если модель недоступна)
+# Загружаем модель один раз
 llm = load_llm_model()
 
 @router.message(F.text)
