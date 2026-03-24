@@ -5,7 +5,6 @@ from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 from dotenv import load_dotenv
 from pathlib import Path
-from handlers import text_handler
 
 import database as db
 import soap_client
@@ -13,9 +12,10 @@ import bitrix_client
 from handlers import (
     start, main_menu, companies, subscriptions, banners, partner_actions, bonus,
     admin_news, admin_categories, admin_admins, admin_stats, admin_managers,
-    admin_set_bitrix_key
+    admin_set_bitrix_key, text_handler  # новый
 )
 from utils.set_bot_commands import set_bot_commands
+from intent_classifier import load_llm_model  # для предзагрузки модели
 
 # Загружаем переменные окружения
 env_path = Path(__file__).parent / '.env'
@@ -32,6 +32,9 @@ logger = logging.getLogger(__name__)
 # Инициализация базы данных
 db.init_db()
 
+# Инициализация модели (чтобы загрузилась при старте, не обязательно)
+load_llm_model()
+
 # Создаём объекты бота и диспетчера
 storage = MemoryStorage()
 bot = Bot(token=TOKEN)
@@ -44,14 +47,14 @@ dp.include_router(companies.router)
 dp.include_router(subscriptions.router)
 dp.include_router(banners.router)
 dp.include_router(partner_actions.router)
-dp.include_router(bonus.router)  # новый
+dp.include_router(bonus.router)
+dp.include_router(text_handler.router)  # добавлен
 dp.include_router(admin_news.router)
 dp.include_router(admin_categories.router)
 dp.include_router(admin_admins.router)
 dp.include_router(admin_stats.router)
 dp.include_router(admin_managers.router)
 dp.include_router(admin_set_bitrix_key.router)
-dp.include_router(text_handler.router)
 
 # ---------- ЗАПУСК ----------
 async def main():

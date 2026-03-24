@@ -1,20 +1,22 @@
+# handlers/text_handler.py
 from aiogram import Router, types, F
 from aiogram.fsm.context import FSMContext
 import logging
-from . import bonus, banners, companies, main_menu
-from llm_intent import get_intent_from_llm
+from handlers import bonus, banners, companies, main_menu
+from intent_classifier import classify_with_model
+from keyboards.common import get_main_keyboard
 
 router = Router()
 logger = logging.getLogger(__name__)
 
-def get_intent_keywords(text):
-    """Простейший парсер ключевых слов."""
+# Парсер ключевых слов
+def keyword_intent(text: str) -> str:
     text = text.lower()
-    if any(word in text for word in ['баланс', 'баллы', 'сколько баллов']):
+    if any(word in text for word in ['баланс', 'баллы', 'сколько баллов', 'бонусы']):
         return 'balance'
     if any(word in text for word in ['история', 'изменение', 'операции']):
         return 'history'
-    if any(word in text for word in ['мои компании', 'какие компании', 'покажи компании']):
+    if any(word in text for word in ['мои компании', 'какие компании', 'список компаний']):
         return 'companies'
     if any(word in text for word in ['акции', 'предложения', 'скидки']):
         return 'banners'
@@ -22,35 +24,40 @@ def get_intent_keywords(text):
         return 'bonus'
     return None
 
-@router.message(F.text)
-async def handle_text(message: types.Message, state: FSMContext):
+async def handle_intent(message: types.Message, intent: str, state: FSMContext):
     user_id = message.from_user.id
-    text = message.text
-
-    # 1. Сначала пробуем keywords
-    intent = get_intent_keywords(text)
-
-    # 2. Если не определилось, используем LLM
-    if not intent:
-        intent = get_intent_from_llm(text)
-        if intent == "unknown":
-            await message.answer("Извините, я не понял запрос. Пожалуйста, используйте кнопки меню.")
-            return
-
-    # 3. Вызываем соответствующую функцию (как при нажатии кнопок)
     if intent == 'balance':
         await bonus.bonus_balance_start(message, state)
     elif intent == 'history':
         await bonus.bonus_history_start(message, state)
     elif intent == 'companies':
-        # В main_menu нет прямой функции для компаний, поэтому вызываем соответствующую логику
-        # В main_menu это обрабатывается в handle_main_menu для текста "🏢 Мои компании"
-        # Создадим фиктивное сообщение или вызовем соответствующую функцию напрямую
-        # Но проще вызвать обработчик из main_menu, передав нужный текст
+        # Передаём "текст" как в главном меню, но можно вызвать напрямую
+        # Используем тот же метод, что и при нажатии кнопки
         await main_menu.handle_main_menu(message, state, text="🏢 Мои компании")
     elif intent == 'banners':
         await main_menu.handle_main_menu(message, state, text="🎁 Текущие акции")
     elif intent == 'bonus':
         await main_menu.handle_main_menu(message, state, text="🎁 Реферальная программа")
     else:
-        await message.answer("Извините, я не понял запрос. Попробуйте воспользоваться кнопками меню.")
+        await message.answer("Извините, я не понял ваш запрос. Попробуйте воспользоваться кнопками меню.", 
+                             reply_markup=get_main_keyboard(user_id))
+
+@router.message(F.text)
+async def text_handler(message: types.Message, state: FSMContext):
+    # Игнорируем команды (они обрабатываются другими роутерами)
+    if message.text.startswith('/'):
+        return
+    user_id = message.from_user.id
+    text = message.text
+    logger.info(f"Получен текст от {user_id}: {text}")
+    # 1. Сначала парсер ключевых слов
+    intent = keyword_intent(text)
+    if intent:
+        logger.info(f"Парсер определил интент: {intent}")
+        await handle_intent(message, intent, state)
+        return
+    # 2. Если не определился, используем модель
+    logger.info("Парсер не сработал, вызываем модель")
+    intent = classify_with_model(text)
+    logger.info(f"Модель определила интент: {intent}")
+    await handle_intent(message, intent, state)
