@@ -101,6 +101,7 @@ def get_intent(text: str, llm) -> Optional[str]:
     return get_intent_by_llm(text, llm)
 
 def extract_brand(text: str, llm) -> Optional[str]:
+    """Извлекает название бренда из запроса, используя LLM."""
     if not llm:
         logger.warning("LLM недоступна, бренд не будет извлечён")
         return None
@@ -113,6 +114,7 @@ def extract_brand(text: str, llm) -> Optional[str]:
 скидки на Loreal -> L'Oreal
 покажи акции орибе -> Oribe
 акции кутем -> Qtem
+покажи акции матрикс -> Matrix
 покажи акции -> none
 Запрос: {text}
 Ответ:"""
