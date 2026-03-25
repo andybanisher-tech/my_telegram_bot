@@ -109,6 +109,11 @@ def extract_brand(text: str, llm) -> Optional[str]:
 
     # Максимально полный fallback-словарь
     brand_map = {
+        # American Crew
+        "американ крю": "American Crew",
+        "американкрю": "American Crew",
+        "american crew": "American Crew",
+        "амкрю": "American Crew",
         # Matrix
         "матрикс": "Matrix",
         "матрик": "Matrix",
