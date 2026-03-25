@@ -101,27 +101,47 @@ def get_intent(text: str, llm) -> Optional[str]:
     return get_intent_by_llm(text, llm)
 
 def extract_brand(text: str, llm) -> Optional[str]:
-    """Извлекает название бренда из запроса, используя LLM."""
+    """Извлекает название бренда из запроса, используя LLM, с fallback."""
     if not llm:
         logger.warning("LLM недоступна, бренд не будет извлечён")
         return None
+
+    # Fallback для явных ключевых слов
+    text_lower = text.lower()
+    if "матрикс" in text_lower:
+        return "Matrix"
+    if "карал" in text_lower:
+        return "Kaaral"
+    if "орибе" in text_lower:
+        return "Oribe"
+    if "кутем" in text_lower:
+        return "Qtem"
+
+    # Промпт для LLM
     prompt = f"""Извлеки название бренда из запроса. Если бренд не упомянут, верни 'none'.
-Пользователь может писать название бренда на английском (Oribe), транслитом (орибе), с ошибками.
-Верни название на английском, в том виде, как оно обычно пишется в каталоге.
 Примеры:
-покажи акции только по матрикс -> Matrix
-акции карал -> Kaaral
-скидки на Loreal -> L'Oreal
-покажи акции орибе -> Oribe
-акции кутем -> Qtem
-покажи акции матрикс -> Matrix
-покажи акции -> none
+Запрос: покажи акции только по матрикс
+Ответ: Matrix
+Запрос: акции карал
+Ответ: Kaaral
+Запрос: скидки на Loreal
+Ответ: L'Oreal
+Запрос: покажи акции орибе
+Ответ: Oribe
+Запрос: акции кутем
+Ответ: Qtem
+Запрос: покажи акции матрикс
+Ответ: Matrix
+Запрос: покажи акции
+Ответ: none
+
+Теперь обработай запрос:
 Запрос: {text}
 Ответ:"""
     try:
         response = llm(prompt, max_tokens=20, stop=["\n"], temperature=0.0)
         raw = response["choices"][0]["text"].strip()
-        logger.info(f"LLM ответ для бренда: '{raw}'")
+        logger.info(f"LLM ответ для бренда (raw): '{raw}'")
         if raw.lower() == "none" or not raw:
             return None
         raw = raw.rstrip('.,;:!?')
