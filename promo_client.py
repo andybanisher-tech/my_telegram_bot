@@ -7,7 +7,7 @@ from typing import List, Dict, Any, Optional
 logger = logging.getLogger(__name__)
 
 PROMO_LIST_URL = "https://exchange.mirlk.ru/SiteExch/hs/site/UrGetPersonalPromotions"
-PROMO_DETAIL_URL = "https://dev.stalker-co.ru/bitrix/tools/mlk_tgbotapi_promo.php"
+PROMO_DETAIL_URL = "https://stalker-co.ru/bitrix/tools/mlk_tgbotapi_promo.php"
 
 def get_config():
     return {
