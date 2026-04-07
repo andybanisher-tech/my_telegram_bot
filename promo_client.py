@@ -1,6 +1,7 @@
 import aiohttp
 import logging
 import os
+import traceback
 from typing import List, Dict, Any, Optional
 
 logger = logging.getLogger(__name__)
@@ -17,6 +18,8 @@ def get_config():
 
 async def get_promotions_list(partner_id: str) -> Optional[List[Dict[str, Any]]]:
     config = get_config()
+    logger.info(f"get_promotions_list called with partner_id={partner_id}")
+    logger.info(f"auth_key present: {bool(config['auth_key'])}")
     if not config["auth_key"]:
         logger.error("BONUS_API_KEY не задан в .env")
         return None
@@ -31,11 +34,13 @@ async def get_promotions_list(partner_id: str) -> Optional[List[Dict[str, Any]]]
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(PROMO_LIST_URL, params=params, headers=headers, timeout=30) as resp:
+                logger.info(f"Response status: {resp.status}")
                 if resp.status != 200:
-                    logger.error(f"Ошибка API списка акций: статус {resp.status}")
+                    text = await resp.text()
+                    logger.error(f"Ошибка API списка акций: статус {resp.status}, тело: {text[:500]}")
                     return None
                 data = await resp.json()
-                # Ответ может быть объектом с полем promotions
+                logger.info(f"Response data keys: {data.keys() if isinstance(data, dict) else 'list'}")
                 if isinstance(data, dict) and "promotions" in data:
                     return data["promotions"]
                 elif isinstance(data, list):
@@ -44,7 +49,7 @@ async def get_promotions_list(partner_id: str) -> Optional[List[Dict[str, Any]]]
                     logger.error(f"Неожиданный формат ответа: {data}")
                     return None
     except Exception as e:
-        logger.error(f"Исключение при запросе списка акций: {e}")
+        logger.error(f"Исключение при запросе списка акций: {e}\n{traceback.format_exc()}")
         return None
 
 async def get_promotion_details(promo_id: str) -> Optional[Dict[str, Any]]:
@@ -65,5 +70,5 @@ async def get_promotion_details(promo_id: str) -> Optional[Dict[str, Any]]:
                 data = await resp.json()
                 return data
     except Exception as e:
-        logger.error(f"Исключение при запросе деталей акции {promo_id}: {e}")
+        logger.error(f"Исключение при запросе деталей акции {promo_id}: {e}\n{traceback.format_exc()}")
         return None
