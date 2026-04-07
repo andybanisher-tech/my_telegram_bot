@@ -53,12 +53,12 @@ async def get_promotions_list(partner_id: str) -> Optional[List[Dict[str, Any]]]
         return None
 
 async def get_promotion_details(promo_id: str) -> Optional[Dict[str, Any]]:
-    config = get_config()
-    if not config["promo_detail_key"]:
-        logger.error("PROMO_API_KEY не задан в .env")
+    api_key = os.getenv("BITRIX_API_KEY")
+    if not api_key:
+        logger.error("BITRIX_API_KEY не задан в .env")
         return None
     params = {
-        "key": config["promo_detail_key"],
+        "key": api_key,
         "promoid": promo_id
     }
     try:
