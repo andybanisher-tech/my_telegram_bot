@@ -9,7 +9,6 @@ PROMO_LIST_URL = "https://exchange.mirlk.ru/SiteExch/hs/site/UrGetPersonalPromot
 PROMO_DETAIL_URL = "https://dev.stalker-co.ru/bitrix/tools/mlk_tgbotapi_promo.php"
 
 def get_config():
-    """Возвращает конфигурацию из переменных окружения."""
     return {
         "promo_detail_key": os.getenv("PROMO_API_KEY"),
         "auth_key": os.getenv("BONUS_API_KEY"),
@@ -36,7 +35,10 @@ async def get_promotions_list(partner_id: str) -> Optional[List[Dict[str, Any]]]
                     logger.error(f"Ошибка API списка акций: статус {resp.status}")
                     return None
                 data = await resp.json()
-                if isinstance(data, list):
+                # Ответ может быть объектом с полем promotions
+                if isinstance(data, dict) and "promotions" in data:
+                    return data["promotions"]
+                elif isinstance(data, list):
                     return data
                 else:
                     logger.error(f"Неожиданный формат ответа: {data}")
