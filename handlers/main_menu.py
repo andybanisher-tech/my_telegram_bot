@@ -70,7 +70,7 @@ async def show_banners(message: types.Message, state: FSMContext, brand: str = N
     if len(companies) == 1:
         await fetch_and_show_banners(message, user_id, companies[0]['code'], brand)
     else:
-        # Если несколько компаний, нужно запросить компанию и передать бренд
+        # Сохраняем бренд в состоянии, чтобы потом использовать при выборе компании
         await state.update_data(brand_filter=brand)
         await state.set_state(states.BannersProcess.choosing_company)
         await message.answer(
