@@ -7,24 +7,26 @@ logger = logging.getLogger(__name__)
 
 PROMO_LIST_URL = "https://exchange.mirlk.ru/SiteExch/hs/site/UrGetPersonalPromotions"
 PROMO_DETAIL_URL = "https://dev.stalker-co.ru/bitrix/tools/mlk_tgbotapi_promo.php"
-PROMO_DETAIL_KEY = os.getenv("PROMO_API_KEY")
-AUTH_KEY = os.getenv("BONUS_API_KEY")  # для авторизации первого запроса
-SITE_ID = os.getenv("BONUS_SITE_ID", "113")
+
+def get_config():
+    """Возвращает конфигурацию из переменных окружения."""
+    return {
+        "promo_detail_key": os.getenv("PROMO_API_KEY"),
+        "auth_key": os.getenv("BONUS_API_KEY"),
+        "site_id": os.getenv("BONUS_SITE_ID", "113")
+    }
 
 async def get_promotions_list(partner_id: str) -> Optional[List[Dict[str, Any]]]:
-    """
-    Получает список акций для партнёра.
-    Возвращает список словарей с полями: id, mark, date_from, date_to.
-    """
-    if not AUTH_KEY:
+    config = get_config()
+    if not config["auth_key"]:
         logger.error("BONUS_API_KEY не задан в .env")
         return None
     params = {
         "IDPartner": partner_id,
-        "SiteID": SITE_ID
+        "SiteID": config["site_id"]
     }
     headers = {
-        "Authorization": AUTH_KEY,
+        "Authorization": config["auth_key"],
         "Accept": "application/json"
     }
     try:
@@ -34,7 +36,6 @@ async def get_promotions_list(partner_id: str) -> Optional[List[Dict[str, Any]]]
                     logger.error(f"Ошибка API списка акций: статус {resp.status}")
                     return None
                 data = await resp.json()
-                # Ожидаем список объектов с ключами id, mark, date_from, date_to
                 if isinstance(data, list):
                     return data
                 else:
@@ -45,15 +46,12 @@ async def get_promotions_list(partner_id: str) -> Optional[List[Dict[str, Any]]]
         return None
 
 async def get_promotion_details(promo_id: str) -> Optional[Dict[str, Any]]:
-    """
-    Получает детальную информацию об акции по её ID.
-    Возвращает словарь с полями: name, description, image, link, date_to и др.
-    """
-    if not PROMO_DETAIL_KEY:
+    config = get_config()
+    if not config["promo_detail_key"]:
         logger.error("PROMO_API_KEY не задан в .env")
         return None
     params = {
-        "key": PROMO_DETAIL_KEY,
+        "key": config["promo_detail_key"],
         "promoid": promo_id
     }
     try:
