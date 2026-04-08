@@ -30,45 +30,47 @@ async def fetch_and_show_banners(message: types.Message, user_id: int, company_c
             await message.answer(f"❌ Нет акций для бренда «{brand_filter}».")
             return
 
-    # Получаем детали каждой акции
-    detailed_promos = []
+    # Формируем HTML-сообщение
+    html_parts = ["<b>🎁 Акции для вас</b>\n\n"]
+
     for promo in promotions:
         promo_id = promo.get('id')
         if not promo_id:
             continue
+
+        # Пытаемся получить детали
         details = await promo_client.get_promotion_details(str(promo_id))
         if details:
-            details['date_from'] = promo.get('date_from')
-            details['date_to'] = promo.get('date_to')
-            details['mark'] = promo.get('mark')
-            detailed_promos.append(details)
-        await asyncio.sleep(0.1)
+            name = details.get('name') or promo.get('name', 'Акция')
+            description = details.get('description') or ''
+            image = details.get('image')
+            link = details.get('link')
+        else:
+            name = promo.get('name', 'Акция')
+            description = ''
+            image = None
+            link = None
 
-    if not detailed_promos:
-        await message.answer("❌ Не удалось загрузить детали акций.")
-        return
-
-    # Формируем HTML-сообщение
-    html_parts = ["<b>🎁 Акции для вас</b>\n\n"]
-    for promo in detailed_promos:
-        name = promo.get('name', 'Акция')
-        html_parts.append(f"<b>{name}</b>")
         date_to = promo.get('date_to')
+        block = f"<b>{name}</b>"
         if date_to:
-            html_parts.append(f"📅 Действует до: {date_to}")
-        image = promo.get('image')
+            block += f"\n📅 Действует до: {date_to}"
+        if description:
+            block += f"\n{description}"
         if image:
-            html_parts.append(f'<a href="{image}">🖼️ Превью акции</a>')
-        link = promo.get('link')
+            block += f'\n<a href="{image}">🖼️ Превью акции</a>'
         if link:
             if not link.startswith(('http://', 'https://')):
                 link = 'https://' + link
-            html_parts.append(f'<a href="{link}">🔗 Подробнее на сайте</a>')
-        html_parts.append("\n" + "-"*30 + "\n")
+            block += f'\n<a href="{link}">🔗 Подробнее на сайте</a>'
+        block += "\n" + "-" * 30 + "\n"
+        html_parts.append(block)
 
     full_html = "\n".join(html_parts)
-    # Разбивка на части при превышении лимита
+
+    # Telegram ограничивает длину сообщения 4096 символов
     if len(full_html) > 4000:
+        # Разбиваем на части
         parts = []
         current = "<b>🎁 Акции для вас</b>\n\n"
         for line in full_html.split("\n"):
