@@ -12,7 +12,7 @@ import promo_client
 router = Router()
 logger = logging.getLogger(__name__)
 
-BASE_WEB_URL = os.getenv("BASE_WEB_URL", "news-bot-stalker.ru")
+BASE_WEB_URL = os.getenv("BASE_WEB_URL", "https://news-bot-stalker.ru")
 
 async def fetch_and_show_banners(message: types.Message, user_id: int, company_code: str, brand_filter: str = None):
     wait_msg = await message.answer("⏳ Готовим подборку акций...")
