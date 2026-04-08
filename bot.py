@@ -59,7 +59,6 @@ dp.include_router(admin_stats.router)
 dp.include_router(admin_managers.router)
 dp.include_router(admin_set_bitrix_key.router)
 
-logger.info(f"Зарегистрированы роутеры: {dp._routers}")
 
 # ---------- ЗАПУСК ----------
 async def main():
