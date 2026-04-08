@@ -1,3 +1,12 @@
+from dotenv import load_dotenv
+from pathlib import Path
+import os
+
+env_path = Path(__file__).parent / '.env'
+print(f"Loading .env from {env_path}, exists={env_path.exists()}")
+load_dotenv(dotenv_path=env_path)
+print("BONUS_API_KEY=", os.getenv("BONUS_API_KEY"))
+
 from flask import Flask, jsonify
 app = Flask(__name__)
 
