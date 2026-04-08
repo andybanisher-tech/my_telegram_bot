@@ -65,10 +65,10 @@ async def main():
     await set_bot_commands(bot)
     logger.info("Бот запущен и готов к работе")
     await dp.start_polling(bot)
+print("Зарегистрированные роутеры:")
+for router in dp.sub_routers:
+    print(router)        
 
 if __name__ == "__main__":
     asyncio.run(main())
 
-print("Зарегистрированные роутеры:")
-for router in dp.sub_routers:
-    print(router)    
