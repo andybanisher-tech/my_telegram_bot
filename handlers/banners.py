@@ -4,33 +4,29 @@ import logging
 from aiogram import Router, types
 from aiogram.fsm.context import FSMContext
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
-from keyboards.common import get_back_to_main_keyboard, get_company_selection_keyboard
+from keyboards.common import get_back_to_main_keyboard
+from keyboards.companies import get_company_selection_keyboard  # исправленный импорт
 from states import states
 import promo_client
-
 
 router = Router()
 logger = logging.getLogger(__name__)
 
-BASE_WEB_URL = os.getenv("BASE_WEB_URL", "https://news-bot-stalker.ru")
+BASE_WEB_URL = os.getenv("BASE_WEB_URL", "news-bot-stalker.ru")
 
 async def fetch_and_show_banners(message: types.Message, user_id: int, company_code: str, brand_filter: str = None):
-    # Отправляем сообщение о начале подготовки
     wait_msg = await message.answer("⏳ Готовим подборку акций...")
     
-    # Формируем URL для Web App
     web_app_url = f"{BASE_WEB_URL}/promo/{company_code}"
     if brand_filter:
         web_app_url += f"?brand={brand_filter}"
     
-    # Создаём кнопку Web App
     web_app_button = InlineKeyboardButton(
         text="🎁 Открыть акции",
         web_app=WebAppInfo(url=web_app_url)
     )
     keyboard = InlineKeyboardMarkup(inline_keyboard=[[web_app_button]])
     
-    # Отправляем сообщение с кнопкой
     await wait_msg.delete()
     await message.answer(
         "🎁 *Ваша персональная подборка акций готова!*\n\n"
