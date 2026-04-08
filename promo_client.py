@@ -1,7 +1,6 @@
 import os
 import logging
 import requests
-from typing import List, Dict, Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -10,12 +9,13 @@ PROMO_DETAIL_URL = "https://stalker-co.ru/bitrix/tools/mlk_tgbotapi_promo.php"
 
 def get_config():
     return {
-        "promo_detail_key": os.getenv("BITRIX_API_KEY"),  # используем BITRIX_API_KEY для второго запроса
+        "promo_detail_key": os.getenv("BITRIX_API_KEY"),
         "auth_key": os.getenv("BONUS_API_KEY"),
         "site_id": os.getenv("BONUS_SITE_ID", "113")
     }
 
-def get_promotions_list_sync(partner_id: str) -> Optional[List[Dict[str, Any]]]:
+def get_promotions_list_sync(partner_id):
+    """Синхронно получает список акций для партнёра."""
     config = get_config()
     if not config["auth_key"]:
         logger.error("BONUS_API_KEY не задан в .env")
@@ -45,7 +45,8 @@ def get_promotions_list_sync(partner_id: str) -> Optional[List[Dict[str, Any]]]:
         logger.error(f"Исключение при запросе списка акций: {e}")
         return None
 
-def get_promotion_details_sync(promo_id: str) -> Optional[Dict[str, Any]]:
+def get_promotion_details_sync(promo_id):
+    """Синхронно получает детали акции по её ID."""
     config = get_config()
     api_key = config.get("promo_detail_key")
     if not api_key:
