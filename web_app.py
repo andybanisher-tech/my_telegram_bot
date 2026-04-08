@@ -1,19 +1,28 @@
 import os
 import asyncio
 import logging
-from flask import Flask, render_template_string, jsonify, request
+import re
+from flask import Flask, render_template_string, abort
 from dotenv import load_dotenv
 from pathlib import Path
-import promo_client
 
-# Загружаем переменные окружения
+# Загружаем переменные окружения из .env
 env_path = Path(__file__).parent / '.env'
 load_dotenv(dotenv_path=env_path)
+
+import promo_client
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
+
+def clean_text(text):
+    """Удаляет суррогатные пары UTF-16 и другие невалидные символы."""
+    if not text:
+        return ""
+    # Удаляем диапазон суррогатных пар (U+D800 – U+DFFF)
+    return re.sub(r'[\ud800-\udfff]', '', text)
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -55,21 +64,7 @@ HTML_TEMPLATE = """
         .loader {
             text-align: center;
             padding: 40px;
-            font-size: 18px;
             color: #6c6c70;
-        }
-        .spinner {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #007aff;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 16px;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
         }
         .promo-card {
             background: white;
@@ -160,29 +155,28 @@ HTML_TEMPLATE = """
         }
     </style>
     <script>
-        async function loadPromotions() {
-            const container = document.getElementById('promo-container');
-            const loader = document.getElementById('loader');
-            const errorDiv = document.getElementById('error');
-            
-            const pathParts = window.location.pathname.split('/');
-            const partnerCode = pathParts[pathParts.length - 1];
-            const url = `/api/promo/${partnerCode}`;
-            
-            try {
-                const response = await fetch(url);
-                if (!response.ok) throw new Error('Ошибка загрузки');
-                const promotions = await response.json();
-                loader.style.display = 'none';
-                
-                if (promotions.length === 0) {
-                    container.innerHTML = '<div style="background: white; border-radius: 20px; padding: 40px 20px; text-align: center;">😔 На данный момент для вас нет активных акций</div>';
-                    return;
-                }
-                
-                let html = '';
-                for (const promo of promotions) {
-                    html += `
+        // Показываем лоадер до полной загрузки страницы
+        document.addEventListener('DOMContentLoaded', function() {
+            document.body.style.opacity = '1';
+        });
+    </script>
+</head>
+<body style="opacity:0; transition: opacity 0.3s;">
+    <div class="container" id="content">
+        <h1>🎁 Акции для вас</h1>
+        <div class="sub">Персональные предложения</div>
+        <div class="loader">⏳ Загружаем акции...</div>
+    </div>
+    <script>
+        // Загружаем данные через fetch и рендерим динамически (чтобы лоадер был виден)
+        fetch(window.location.href + '/data')
+            .then(response => response.json())
+            .then(data => {
+                const container = document.getElementById('content');
+                if (data.promotions && data.promotions.length) {
+                    let html = '<h1>🎁 Акции для вас</h1><div class="sub">Персональные предложения</div>';
+                    data.promotions.forEach(promo => {
+                        html += `
                         <div class="promo-card">
                             <div class="promo-title">${escapeHtml(promo.name)}</div>
                             <div class="promo-meta">
@@ -193,15 +187,17 @@ HTML_TEMPLATE = """
                             ${promo.description ? `<div class="promo-description">${escapeHtml(promo.description)}</div>` : ''}
                             ${promo.link ? `<a href="${escapeHtml(promo.link)}" class="promo-button" target="_blank" rel="noopener noreferrer">🔗 Подробнее на сайте</a>` : ''}
                         </div>
-                    `;
+                        `;
+                    });
+                    container.innerHTML = html;
+                } else {
+                    container.innerHTML = '<h1>🎁 Акции для вас</h1><div class="sub">Персональные предложения</div><div style="background: white; border-radius: 20px; padding: 40px 20px; text-align: center;">😔 На данный момент для вас нет активных акций</div><div class="footer">Stalker-Co — всё для профессионалов</div>';
                 }
-                container.innerHTML = html;
-            } catch (err) {
-                console.error(err);
-                loader.style.display = 'none';
-                errorDiv.style.display = 'block';
-            }
-        }
+            })
+            .catch(error => {
+                console.error('Ошибка загрузки акций:', error);
+                document.getElementById('content').innerHTML = '<h1>🎁 Акции для вас</h1><div class="sub">Персональные предложения</div><div style="background: white; border-radius: 20px; padding: 40px 20px; text-align: center;">❌ Ошибка загрузки акций. Попробуйте позже.</div><div class="footer">Stalker-Co — всё для профессионалов</div>';
+            });
         
         function escapeHtml(str) {
             if (!str) return '';
@@ -210,31 +206,11 @@ HTML_TEMPLATE = """
                 if (m === '<') return '&lt;';
                 if (m === '>') return '&gt;';
                 return m;
-            }).replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, function(c) {
-                return c;
             });
         }
-        
-        document.addEventListener('DOMContentLoaded', loadPromotions);
     </script>
-</head>
-<body>
-    <div class="container">
-        <h1>🎁 Акции для вас</h1>
-        <div class="sub">Персональные предложения</div>
-        
-        <div id="loader" class="loader">
-            <div class="spinner"></div>
-            Загружаем акции...
-        </div>
-        <div id="error" style="display: none; text-align: center; color: red; padding: 20px;">
-            ⚠️ Не удалось загрузить акции. Попробуйте позже.
-        </div>
-        <div id="promo-container"></div>
-        
-        <div class="footer">
-            Stalker-Co — всё для профессионалов
-        </div>
+    <div class="footer">
+        Stalker-Co — всё для профессионалов
     </div>
 </body>
 </html>
@@ -252,13 +228,13 @@ def run_async(coro):
 
 @app.route('/promo/<partner_code>')
 def promo_page(partner_code):
-    """Страница с лоадером, данные подгружаются через API"""
+    """Основная страница – отдаём HTML с лоадером, данные подгружаются через /promo/<partner_code>/data"""
     return render_template_string(HTML_TEMPLATE)
 
-@app.route('/api/promo/<partner_code>')
-def api_promo(partner_code):
-    """JSON-эндпоинт для получения акций"""
-    logger.info(f"API запрос для партнера {partner_code}")
+@app.route('/promo/<partner_code>/data')
+def promo_data(partner_code):
+    """JSON-эндпоинт для получения данных об акциях (для динамической подгрузки)"""
+    logger.info(f"Запрос данных для партнера {partner_code}")
     try:
         promotions_list = run_async(promo_client.get_promotions_list(partner_code))
         logger.info(f"Получено акций из первого запроса: {len(promotions_list) if promotions_list else 0}")
@@ -267,8 +243,8 @@ def api_promo(partner_code):
         promotions_list = []
     
     if not promotions_list:
-        return jsonify([])
-    
+        return {"promotions": []}, 404
+
     enriched_promos = []
     for promo in promotions_list:
         promo_id = promo.get('id')
@@ -281,18 +257,18 @@ def api_promo(partner_code):
             logger.error(f"Ошибка при получении деталей акции {clean_id}: {e}")
             details = None
         enriched = {
-            'name': details.get('name') if details else promo.get('name', 'Акция'),
-            'description': details.get('description') if details else '',
-            'image': details.get('image') if details else None,
-            'link': details.get('link') if details else None,
-            'mark': promo.get('mark', ''),
-            'date_to': promo.get('date_to', ''),
-            'date_from': promo.get('date_from', '')
+            'name': clean_text(details.get('name')) if details else clean_text(promo.get('name', 'Акция')),
+            'description': clean_text(details.get('description')) if details else '',
+            'image': clean_text(details.get('image')) if details else None,
+            'link': clean_text(details.get('link')) if details else None,
+            'mark': clean_text(promo.get('mark', '')),
+            'date_to': clean_text(promo.get('date_to', '')),
+            'date_from': clean_text(promo.get('date_from', ''))
         }
         enriched_promos.append(enriched)
     
     logger.info(f"Сформировано {len(enriched_promos)} акций для отображения")
-    return jsonify(enriched_promos)
+    return {"promotions": enriched_promos}
 
 @app.route('/health')
 def health_check():
