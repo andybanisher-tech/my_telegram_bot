@@ -1,13 +1,12 @@
 import os
 import asyncio
 import logging
-from flask import Flask, render_template_string, abort
-import promo_client
-
+from flask import Flask, render_template_string, jsonify, request
 from dotenv import load_dotenv
 from pathlib import Path
+import promo_client
 
-# Загружаем переменные окружения из .env
+# Загружаем переменные окружения
 env_path = Path(__file__).parent / '.env'
 load_dotenv(dotenv_path=env_path)
 
@@ -52,6 +51,25 @@ HTML_TEMPLATE = """
             color: #6c6c70;
             margin-bottom: 28px;
             font-size: 15px;
+        }
+        .loader {
+            text-align: center;
+            padding: 40px;
+            font-size: 18px;
+            color: #6c6c70;
+        }
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #007aff;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
         .promo-card {
             background: white;
@@ -141,44 +159,79 @@ HTML_TEMPLATE = """
             .promo-title { font-size: 18px; }
         }
     </style>
+    <script>
+        async function loadPromotions() {
+            const container = document.getElementById('promo-container');
+            const loader = document.getElementById('loader');
+            const errorDiv = document.getElementById('error');
+            
+            const pathParts = window.location.pathname.split('/');
+            const partnerCode = pathParts[pathParts.length - 1];
+            const url = `/api/promo/${partnerCode}`;
+            
+            try {
+                const response = await fetch(url);
+                if (!response.ok) throw new Error('Ошибка загрузки');
+                const promotions = await response.json();
+                loader.style.display = 'none';
+                
+                if (promotions.length === 0) {
+                    container.innerHTML = '<div style="background: white; border-radius: 20px; padding: 40px 20px; text-align: center;">😔 На данный момент для вас нет активных акций</div>';
+                    return;
+                }
+                
+                let html = '';
+                for (const promo of promotions) {
+                    html += `
+                        <div class="promo-card">
+                            <div class="promo-title">${escapeHtml(promo.name)}</div>
+                            <div class="promo-meta">
+                                ${promo.mark ? `<span class="brand-badge">${escapeHtml(promo.mark)}</span>` : ''}
+                                ${promo.date_to ? `<span>📅 до ${escapeHtml(promo.date_to)}</span>` : ''}
+                            </div>
+                            ${promo.image ? `<div class="promo-image"><img src="${escapeHtml(promo.image)}" alt="Превью акции"></div>` : ''}
+                            ${promo.description ? `<div class="promo-description">${escapeHtml(promo.description)}</div>` : ''}
+                            ${promo.link ? `<a href="${escapeHtml(promo.link)}" class="promo-button" target="_blank" rel="noopener noreferrer">🔗 Подробнее на сайте</a>` : ''}
+                        </div>
+                    `;
+                }
+                container.innerHTML = html;
+            } catch (err) {
+                console.error(err);
+                loader.style.display = 'none';
+                errorDiv.style.display = 'block';
+            }
+        }
+        
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/[&<>]/g, function(m) {
+                if (m === '&') return '&amp;';
+                if (m === '<') return '&lt;';
+                if (m === '>') return '&gt;';
+                return m;
+            }).replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, function(c) {
+                return c;
+            });
+        }
+        
+        document.addEventListener('DOMContentLoaded', loadPromotions);
+    </script>
 </head>
 <body>
     <div class="container">
         <h1>🎁 Акции для вас</h1>
         <div class="sub">Персональные предложения</div>
-
-        {% if promotions %}
-            {% for promo in promotions %}
-            <div class="promo-card">
-                <div class="promo-title">{{ promo.name | e }}</div>
-                <div class="promo-meta">
-                    {% if promo.mark %}
-                    <span class="brand-badge">{{ promo.mark | e }}</span>
-                    {% endif %}
-                    {% if promo.date_to %}
-                    <span>📅 до {{ promo.date_to }}</span>
-                    {% endif %}
-                </div>
-                {% if promo.image %}
-                <div class="promo-image">
-                    <img src="{{ promo.image }}" alt="Превью акции {{ promo.name | e }}">
-                </div>
-                {% endif %}
-                {% if promo.description %}
-                <div class="promo-description">{{ promo.description | e }}</div>
-                {% endif %}
-                {% if promo.link %}
-                <a href="{{ promo.link }}" class="promo-button" target="_blank" rel="noopener noreferrer">
-                    🔗 Подробнее на сайте
-                </a>
-                {% endif %}
-            </div>
-            {% endfor %}
-        {% else %}
-            <div style="background: white; border-radius: 20px; padding: 40px 20px; text-align: center;">
-                😔 На данный момент для вас нет активных акций
-            </div>
-        {% endif %}
+        
+        <div id="loader" class="loader">
+            <div class="spinner"></div>
+            Загружаем акции...
+        </div>
+        <div id="error" style="display: none; text-align: center; color: red; padding: 20px;">
+            ⚠️ Не удалось загрузить акции. Попробуйте позже.
+        </div>
+        <div id="promo-container"></div>
+        
         <div class="footer">
             Stalker-Co — всё для профессионалов
         </div>
@@ -199,7 +252,13 @@ def run_async(coro):
 
 @app.route('/promo/<partner_code>')
 def promo_page(partner_code):
-    logger.info(f"Запрос страницы для партнера {partner_code}")
+    """Страница с лоадером, данные подгружаются через API"""
+    return render_template_string(HTML_TEMPLATE)
+
+@app.route('/api/promo/<partner_code>')
+def api_promo(partner_code):
+    """JSON-эндпоинт для получения акций"""
+    logger.info(f"API запрос для партнера {partner_code}")
     try:
         promotions_list = run_async(promo_client.get_promotions_list(partner_code))
         logger.info(f"Получено акций из первого запроса: {len(promotions_list) if promotions_list else 0}")
@@ -208,8 +267,8 @@ def promo_page(partner_code):
         promotions_list = []
     
     if not promotions_list:
-        return render_template_string(HTML_TEMPLATE, promotions=[]), 404
-
+        return jsonify([])
+    
     enriched_promos = []
     for promo in promotions_list:
         promo_id = promo.get('id')
@@ -233,7 +292,7 @@ def promo_page(partner_code):
         enriched_promos.append(enriched)
     
     logger.info(f"Сформировано {len(enriched_promos)} акций для отображения")
-    return render_template_string(HTML_TEMPLATE, promotions=enriched_promos)
+    return jsonify(enriched_promos)
 
 @app.route('/health')
 def health_check():
