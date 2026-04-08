@@ -4,6 +4,7 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
+from states import ManagerManagement
 import database as db
 from config import STATIC_MANAGERS
 from utils.helpers import is_admin
@@ -11,11 +12,6 @@ from utils.helpers import is_admin
 router = Router()
 logger = logging.getLogger(__name__)
 
-class ManagerManagement(StatesGroup):
-    choosing_action = State()
-    waiting_for_new_manager_id = State()
-    waiting_for_new_manager_name = State()
-    choosing_manager_to_remove = State()
 
 def get_manager_management_keyboard():
     builder = InlineKeyboardBuilder()

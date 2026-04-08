@@ -31,3 +31,10 @@ class SubscriptionManagement(StatesGroup):
 
 class BannersProcess(StatesGroup):
     choosing_company = State()
+
+# Добавьте этот класс
+class ManagerManagement(StatesGroup):
+    choosing_action = State()
+    waiting_for_new_manager_id = State()
+    waiting_for_new_manager_name = State()
+    choosing_manager_to_remove = State()
