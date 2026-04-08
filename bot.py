@@ -51,7 +51,7 @@ dp.include_router(subscriptions.router)
 dp.include_router(banners.router)
 dp.include_router(partner_actions.router)
 dp.include_router(bonus.router)
-#dp.include_router(text_handler.router)  # добавлен
+dp.include_router(text_handler.router)  # добавлен
 dp.include_router(admin_news.router)
 dp.include_router(admin_categories.router)
 dp.include_router(admin_admins.router)

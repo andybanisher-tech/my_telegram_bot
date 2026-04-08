@@ -26,7 +26,9 @@ def extract_partner_id(text: str):
         return original_letter + match.group(2)
     return None
 
-@router.message(F.text)
+
+
+@router.message(F.text, lambda msg: not msg.text.startswith('/'))
 async def handle_text(message: types.Message, state: FSMContext):
     global llm
     user_id = message.from_user.id
