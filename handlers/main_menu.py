@@ -78,6 +78,14 @@ async def show_banners(message: types.Message, state: FSMContext, brand: str = N
             reply_markup=get_company_selection_keyboard(companies)
         )
 
+async def show_banners_for_partner(message: types.Message, state: FSMContext, partner_id: str):
+    """Показывает акции для указанного контрагента (только для менеджеров)."""
+    user_id = message.from_user.id
+    if not is_manager(user_id):
+        await message.answer("⛔ У вас нет прав для просмотра акций других контрагентов.")
+        return
+    await fetch_and_show_banners(message, user_id, partner_id, brand_filter=None)
+
 async def show_bonus(message: types.Message, state: FSMContext):
     await message.answer("Выберите раздел:", reply_markup=get_bonus_submenu_keyboard())
 

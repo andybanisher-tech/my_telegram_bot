@@ -1,5 +1,6 @@
 import os
 import logging
+import re
 from typing import Optional, Tuple
 from llama_cpp import Llama
 
@@ -29,9 +30,8 @@ KEYWORDS = {
         "мои компании", "какие компании", "организации", "фирмы"
     ],
     "banners": [
-    "акции", "предложения", "скидки", "актуальные акции", "что нового",
-    "распродажи", "распродажа"
-],
+        "акции", "предложения", "скидки", "актуальные акции", "что нового", "распродажи"
+    ],
     "bonus": [
         "реферальная", "программа", "партнерская", "рефералка"
     ],
@@ -100,14 +100,19 @@ def get_intent(text: str, llm) -> Optional[str]:
         return intent
     return get_intent_by_llm(text, llm)
 
+def extract_partner_id(text: str) -> Optional[str]:
+    """Извлекает ID контрагента из текста (например, С88201, Т0066007)."""
+    # Паттерн: буква (русская или латинская) + цифры (от 1 до 20 символов)
+    match = re.search(r'([A-Za-zА-Яа-я])(\d{1,20})', text)
+    if match:
+        return match.group(0)  # возвращаем полное совпадение, например "С88201"
+    return None
+
 def extract_brand(text: str, llm) -> Optional[str]:
-    """Извлекает название бренда из запроса, используя fallback-словарь и LLM."""
     if not llm:
         return None
-
     text_lower = text.lower()
-
-    # Максимально полный fallback-словарь
+    # Быстрый fallback для часто встречающихся брендов
     brand_map = {
         # American Crew
         "американ крю": "American Crew",
@@ -335,13 +340,9 @@ def extract_brand(text: str, llm) -> Optional[str]:
         "зкью": "ZQ-II",
         "zq-ii": "ZQ-II",
     }
-
-    # Проверяем вхождение любого из вариантов
-    for key, value in brand_map.items():
-        if key in text_lower:
-            return value
-
-    # Если не нашли, используем LLM
+    for ru, en in brand_map.items():
+        if ru in text_lower:
+            return en
     prompt = f"""Извлеки название бренда из запроса. Если бренд не упомянут, верни 'none'.
 Примеры:
 покажи акции только по матрикс -> Matrix
