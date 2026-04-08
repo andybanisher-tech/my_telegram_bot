@@ -1,9 +1,11 @@
+import os
 import asyncio
 import logging
 from aiogram import Router, types, F
 from aiogram.fsm.context import FSMContext
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 import database as db
+import promo_client
 from utils.helpers import is_manager
 from keyboards.common import (
     get_main_keyboard, get_phone_keyboard, get_back_to_main_keyboard,
@@ -16,7 +18,6 @@ from handlers.banners import fetch_and_show_banners
 from handlers.partner_actions import partner_actions_start
 from handlers.bonus import show_company_selection, fetch_and_show_balance, fetch_and_show_history
 from states import states
-import promo_client
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -140,7 +141,7 @@ async def show_help(message: types.Message, state: FSMContext):
     help_text += "\nЕсли у вас есть вопросы, обратитесь к администратору."
     await message.answer(help_text, parse_mode="Markdown")
 
-# ---------- Обработчики кнопок главного меню ----------
+# ---------- Оригинальный обработчик кнопок главного меню ----------
 @router.message(F.text.in_([
     "📰 Подписаться на новости", "📋 Мои подписки", "🏢 Мои компании",
     "🎁 Текущие акции", "🎁 Реферальная программа", "👥 Акции контрагента",
