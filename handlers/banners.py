@@ -10,7 +10,7 @@ router = Router()
 logger = logging.getLogger(__name__)
 
 # Базовый URL веб-сервера с акциями (будет взят из .env)
-BASE_WEB_URL = os.getenv("BASE_WEB_URL", "https://your-domain.com")
+BASE_WEB_URL = os.getenv("BASE_WEB_URL", "https://vm94041.it-garage.network")
 
 async def fetch_and_show_banners(message: types.Message, user_id: int, company_code: str, brand_filter: str = None):
     """
