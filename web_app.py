@@ -4,6 +4,13 @@ import logging
 from flask import Flask, render_template_string, abort
 import promo_client
 
+from dotenv import load_dotenv
+from pathlib import Path
+
+# Загружаем переменные окружения из .env
+env_path = Path(__file__).parent / '.env'
+load_dotenv(dotenv_path=env_path)
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
