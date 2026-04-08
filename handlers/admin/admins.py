@@ -63,6 +63,10 @@ async def admin_add_start(callback: types.CallbackQuery, state: FSMContext):
     )
     await callback.answer()
 
+@router.message(Command("test"))
+async def test_command(message: types.Message):
+    await message.answer("✅ Тестовый обработчик работает!")    
+
 @router.message(AdminManagement.waiting_for_new_admin_id)
 async def admin_add_id_received(message: types.Message, state: FSMContext):
     if not is_admin(message.from_user.id):
@@ -211,3 +215,4 @@ async def admin_cancel(callback: types.CallbackQuery, state: FSMContext):
         reply_markup=get_admin_management_keyboard()
     )
     await callback.answer()
+    
