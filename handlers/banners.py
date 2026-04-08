@@ -10,13 +10,9 @@ router = Router()
 logger = logging.getLogger(__name__)
 
 # Базовый URL веб-сервера
-BASE_WEB_URL = os.getenv("BASE_WEB_URL")
+BASE_WEB_URL = "https://news-bot-stalker.ru"
 
 async def fetch_and_show_banners(message: types.Message, user_id: int, company_code: str, brand_filter: str = None):
-    if not BASE_WEB_URL:
-        await message.answer("❌ Ошибка: не настроен адрес веб-сервера. Обратитесь к администратору.")
-        return
-
     await message.answer("⏳ Готовим подборку акций...")
     
     # Формируем URL для веб-страницы
