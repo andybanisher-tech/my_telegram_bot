@@ -1,32 +1,42 @@
 import asyncio
+import os
+import logging
 from aiogram import Router, types
 from aiogram.fsm.context import FSMContext
-from keyboards.common import get_back_to_main_keyboard
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
+from keyboards.common import get_back_to_main_keyboard, get_company_selection_keyboard
 from states import states
-import logging
-import os
+import promo_client
+
 
 router = Router()
 logger = logging.getLogger(__name__)
 
-# Базовый URL веб-сервера
-BASE_WEB_URL = "https://news-bot-stalker.ru"
+BASE_WEB_URL = os.getenv("BASE_WEB_URL", "https://news-bot-stalker.ru")
 
 async def fetch_and_show_banners(message: types.Message, user_id: int, company_code: str, brand_filter: str = None):
-    await message.answer("⏳ Готовим подборку акций...")
+    # Отправляем сообщение о начале подготовки
+    wait_msg = await message.answer("⏳ Готовим подборку акций...")
     
-    # Формируем URL для веб-страницы
-    promo_url = f"{BASE_WEB_URL}/promo/{company_code}"
+    # Формируем URL для Web App
+    web_app_url = f"{BASE_WEB_URL}/promo/{company_code}"
     if brand_filter:
-        promo_url += f"?brand={brand_filter}"
+        web_app_url += f"?brand={brand_filter}"
     
-    # Отправляем ссылку. Telegram сам подхватит Open Graph мета-теги и покажет превью
+    # Создаём кнопку Web App
+    web_app_button = InlineKeyboardButton(
+        text="🎁 Открыть акции",
+        web_app=WebAppInfo(url=web_app_url)
+    )
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[[web_app_button]])
+    
+    # Отправляем сообщение с кнопкой
+    await wait_msg.delete()
     await message.answer(
-        f"🎁 *Ваша персональная подборка акций готова!*\n\n"
-        f"Нажмите на кнопку ниже, чтобы открыть страницу с предложениями.\n\n"
-        f"🔗 [Открыть страницу с акциями]({promo_url})",
+        "🎁 *Ваша персональная подборка акций готова!*\n\n"
+        "Нажмите на кнопку ниже, чтобы открыть страницу с предложениями.",
         parse_mode="Markdown",
-        disable_web_page_preview=False
+        reply_markup=keyboard
     )
     await message.answer("Выберите действие:", reply_markup=get_back_to_main_keyboard())
 
