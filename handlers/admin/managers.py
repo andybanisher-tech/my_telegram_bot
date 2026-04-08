@@ -5,8 +5,8 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 import database as db
+from config import STATIC_MANAGERS
 from utils.helpers import is_admin
-from keyboards.common import get_back_to_main_keyboard
 
 router = Router()
 logger = logging.getLogger(__name__)

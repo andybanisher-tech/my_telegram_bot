@@ -2,36 +2,60 @@ import logging
 from aiogram import Router, types
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import BotCommand, BotCommandScopeChat
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 import database as db
 from config import STATIC_ADMINS
-from keyboards.admin import (
-    get_admin_management_keyboard,
-    get_admins_list_keyboard
-)
-from states import states
-from utils.helpers import is_admin  # правильный импорт
+from utils.helpers import is_admin
 
-logger = logging.getLogger(__name__)
 router = Router()
+logger = logging.getLogger(__name__)
+
+class AdminManagement(StatesGroup):
+    choosing_action = State()
+    waiting_for_new_admin_id = State()
+    waiting_for_new_admin_name = State()
+    choosing_admin_to_remove = State()
+
+def get_admin_management_keyboard():
+    builder = InlineKeyboardBuilder()
+    builder.button(text="➕ Добавить администратора", callback_data="admin_add")
+    builder.button(text="➖ Удалить администратора", callback_data="admin_remove")
+    builder.button(text="📋 Список администраторов", callback_data="admin_list")
+    builder.button(text="◀️ Назад", callback_data="admin_back")
+    builder.adjust(1)
+    return builder.as_markup()
+
+def get_admins_list_keyboard(static_admins):
+    admins = db.get_db_admins()
+    builder = InlineKeyboardBuilder()
+    for admin in admins:
+        if admin["id"] in static_admins:
+            continue
+        button_text = f"{admin['name']} ({admin['id']})"
+        builder.button(text=button_text, callback_data=f"remove_admin_{admin['id']}")
+    builder.button(text="◀️ Отмена", callback_data="admin_cancel")
+    builder.adjust(1)
+    return builder.as_markup()
 
 @router.message(Command("manage_admins"))
 async def cmd_manage_admins(message: types.Message, state: FSMContext):
     if not is_admin(message.from_user.id):
         await message.answer("⛔ Доступ запрещён.")
         return
-    await state.set_state(states.AdminManagement.choosing_action)
+    await state.set_state(AdminManagement.choosing_action)
     await message.answer(
         "Управление администраторами. Выберите действие:",
         reply_markup=get_admin_management_keyboard()
     )
 
-@router.callback_query(lambda c: c.data == "admin_add", states.AdminManagement.choosing_action)
+@router.callback_query(lambda c: c.data == "admin_add", AdminManagement.choosing_action)
 async def admin_add_start(callback: types.CallbackQuery, state: FSMContext):
     if not is_admin(callback.from_user.id):
         await callback.answer("Недоступно")
         return
-    await state.set_state(states.AdminManagement.waiting_for_new_admin_id)
+    await state.set_state(AdminManagement.waiting_for_new_admin_id)
     await callback.message.edit_text(
         "Введите Telegram ID нового администратора (число).\n"
         "Узнать ID можно у @userinfobot.\n"
@@ -39,7 +63,7 @@ async def admin_add_start(callback: types.CallbackQuery, state: FSMContext):
     )
     await callback.answer()
 
-@router.message(states.AdminManagement.waiting_for_new_admin_id)
+@router.message(AdminManagement.waiting_for_new_admin_id)
 async def admin_add_id_received(message: types.Message, state: FSMContext):
     if not is_admin(message.from_user.id):
         return
@@ -60,12 +84,10 @@ async def admin_add_id_received(message: types.Message, state: FSMContext):
         await message.answer("❌ Этот администратор уже есть в базе.")
         return
     await state.update_data(new_admin_id=new_admin_id)
-    await state.set_state(states.AdminManagement.waiting_for_new_admin_name)
-    await message.answer(
-        "Введите имя для этого администратора (например, Иван или @username):"
-    )
+    await state.set_state(AdminManagement.waiting_for_new_admin_name)
+    await message.answer("Введите имя для этого администратора (например, Иван или @username):")
 
-@router.message(states.AdminManagement.waiting_for_new_admin_name)
+@router.message(AdminManagement.waiting_for_new_admin_name)
 async def admin_add_name_received(message: types.Message, state: FSMContext):
     if not is_admin(message.from_user.id):
         return
@@ -80,7 +102,7 @@ async def admin_add_name_received(message: types.Message, state: FSMContext):
     data = await state.get_data()
     new_admin_id = data.get("new_admin_id")
     db.add_admin(new_admin_id, name)
-    # Устанавливаем команды для нового админа
+    # Устанавливаем команды для нового админа (опционально)
     admin_commands = [
         BotCommand(command="admin", description="📢 Создать новость"),
         BotCommand(command="stats", description="📊 Статистика"),
@@ -94,13 +116,13 @@ async def admin_add_name_received(message: types.Message, state: FSMContext):
     except Exception as e:
         logger.error(f"Не удалось установить команды для админа {new_admin_id}: {e}")
     await message.answer(f"✅ Пользователь {name} (ID {new_admin_id}) добавлен в администраторы.")
-    await state.set_state(states.AdminManagement.choosing_action)
+    await state.set_state(AdminManagement.choosing_action)
     await message.answer(
         "Управление администраторами. Выберите действие:",
         reply_markup=get_admin_management_keyboard()
     )
 
-@router.callback_query(lambda c: c.data == "admin_remove", states.AdminManagement.choosing_action)
+@router.callback_query(lambda c: c.data == "admin_remove", AdminManagement.choosing_action)
 async def admin_remove_start(callback: types.CallbackQuery, state: FSMContext):
     if not is_admin(callback.from_user.id):
         await callback.answer("Недоступно")
@@ -109,20 +131,20 @@ async def admin_remove_start(callback: types.CallbackQuery, state: FSMContext):
     removable = [a for a in admins if a["id"] not in STATIC_ADMINS]
     if not removable:
         await callback.message.edit_text("Нет администраторов для удаления (кроме статических).")
-        await state.set_state(states.AdminManagement.choosing_action)
+        await state.set_state(AdminManagement.choosing_action)
         await callback.message.answer(
             "Управление администраторами. Выберите действие:",
             reply_markup=get_admin_management_keyboard()
         )
         return
-    await state.set_state(states.AdminManagement.choosing_admin_to_remove)
+    await state.set_state(AdminManagement.choosing_admin_to_remove)
     await callback.message.edit_text(
         "Выберите администратора для удаления:",
         reply_markup=get_admins_list_keyboard(STATIC_ADMINS)
     )
     await callback.answer()
 
-@router.callback_query(lambda c: c.data.startswith("remove_admin_"), states.AdminManagement.choosing_admin_to_remove)
+@router.callback_query(lambda c: c.data.startswith("remove_admin_"), AdminManagement.choosing_admin_to_remove)
 async def admin_remove_confirm(callback: types.CallbackQuery, state: FSMContext):
     if not is_admin(callback.from_user.id):
         await callback.answer("Недоступно")
@@ -134,13 +156,13 @@ async def admin_remove_confirm(callback: types.CallbackQuery, state: FSMContext)
     db.remove_admin(admin_id)
     await callback.answer("✅ Администратор удалён")
     await callback.message.edit_text("✅ Администратор удалён.")
-    await state.set_state(states.AdminManagement.choosing_action)
+    await state.set_state(AdminManagement.choosing_action)
     await callback.message.answer(
         "Управление администраторами. Выберите действие:",
         reply_markup=get_admin_management_keyboard()
     )
 
-@router.callback_query(lambda c: c.data == "admin_list", states.AdminManagement.choosing_action)
+@router.callback_query(lambda c: c.data == "admin_list", AdminManagement.choosing_action)
 async def admin_list(callback: types.CallbackQuery, state: FSMContext):
     if not is_admin(callback.from_user.id):
         await callback.answer("Недоступно")
@@ -162,7 +184,7 @@ async def admin_list(callback: types.CallbackQuery, state: FSMContext):
     else:
         lines.append("Нет администраторов в БД.")
     await callback.message.edit_text("\n".join(lines), parse_mode="Markdown")
-    await state.set_state(states.AdminManagement.choosing_action)
+    await state.set_state(AdminManagement.choosing_action)
     await callback.message.answer(
         "Управление администраторами. Выберите действие:",
         reply_markup=get_admin_management_keyboard()
@@ -183,7 +205,7 @@ async def admin_cancel(callback: types.CallbackQuery, state: FSMContext):
     if not is_admin(callback.from_user.id):
         await callback.answer("Недоступно")
         return
-    await state.set_state(states.AdminManagement.choosing_action)
+    await state.set_state(AdminManagement.choosing_action)
     await callback.message.edit_text(
         "Управление администраторами. Выберите действие:",
         reply_markup=get_admin_management_keyboard()
