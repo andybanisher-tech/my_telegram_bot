@@ -39,8 +39,8 @@ async def fetch_and_show_banners(message: types.Message, user_id: int, company_c
             continue
 
         # Пытаемся получить детали
-        lean_id = str(int(promo_id)) if promo_id.isdigit() else promo_id
-        details = await promo_client.get_promotion_details(str(promo_id))
+        clean_id = str(int(promo_id)) if promo_id.isdigit() else promo_id
+        details = await promo_client.get_promotion_details(clean_id)
         if details:
             name = details.get('name') or promo.get('name', 'Акция')
             description = details.get('description') or ''
