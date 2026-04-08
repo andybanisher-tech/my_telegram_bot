@@ -1,7 +1,7 @@
+from flask import Flask, render_template_string, jsonify, request
 import os
 import logging
 import re
-from flask import Flask, render_template_string, jsonify
 from dotenv import load_dotenv
 from pathlib import Path
 import promo_client
@@ -14,11 +14,20 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
+# Добавляем CORS заголовки после каждого запроса
+@app.after_request
+def after_request(response):
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type')
+    response.headers.add('Access-Control-Allow-Methods', 'GET, POST')
+    return response
+
 def clean_text(text):
     if not text:
         return ""
     return re.sub(r'[\ud800-\udfff]', '', text)
 
+# HTML_TEMPLATE тот же, но в fetch используем полный URL
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="ru">
@@ -32,7 +41,6 @@ HTML_TEMPLATE = """
     <meta property="og:image" content="https://stalker-co.ru/local/templates/stalker/images/logo.png" />
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        /* CSS переменные для светлой темы (по умолчанию) */
         :root {
             --bg-color: #ffffff;
             --text-color: #1c1c1e;
@@ -44,7 +52,6 @@ HTML_TEMPLATE = """
             --button-bg: #007aff;
             --button-hover: #005fc1;
         }
-        /* Тёмная тема (класс dark) */
         body.dark {
             --bg-color: #000000;
             --text-color: #ffffff;
@@ -101,24 +108,16 @@ HTML_TEMPLATE = """
         @media (max-width: 480px) { body { padding: 12px; } .promo-card { padding: 16px; } .promo-title { font-size: 18px; } }
     </style>
     <script>
-        // Функция для применения темы
-        function applyTheme() {
-            if (window.Telegram && Telegram.WebApp) {
-                const tg = Telegram.WebApp;
-                if (tg.colorScheme === 'dark') {
-                    document.body.classList.add('dark');
-                } else {
-                    document.body.classList.remove('dark');
-                }
-            }
+        const tg = window.Telegram.WebApp;
+        tg.ready();
+        if (tg.colorScheme === 'dark') {
+            document.body.classList.add('dark');
         }
-        // Дожидаемся загрузки DOM
-        document.addEventListener('DOMContentLoaded', function() {
-            applyTheme();
-            // Подписываемся на изменение темы в Telegram
-            if (window.Telegram && Telegram.WebApp) {
-                Telegram.WebApp.onEvent('themeChanged', applyTheme);
-                Telegram.WebApp.ready();
+        tg.onEvent('themeChanged', () => {
+            if (tg.colorScheme === 'dark') {
+                document.body.classList.add('dark');
+            } else {
+                document.body.classList.remove('dark');
             }
         });
     </script>
@@ -140,13 +139,10 @@ HTML_TEMPLATE = """
                 return m;
             });
         }
-        fetch(window.location.href + '/data')
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('HTTP error ' + response.status);
-                }
-                return response.json();
-            })
+        // Используем полный URL, чтобы избежать проблем с относительными путями в WebView
+        const dataUrl = window.location.origin + window.location.pathname + '/data';
+        fetch(dataUrl)
+            .then(response => response.json())
             .then(data => {
                 const container = document.getElementById('content');
                 if (data.promotions && data.promotions.length) {
@@ -187,11 +183,7 @@ def promo_page(partner_code):
 def promo_data(partner_code):
     logger.info(f"Запрос данных для {partner_code}")
     promotions_list = promo_client.get_promotions_list_sync(partner_code)
-    if promotions_list is None:
-        logger.error(f"Не удалось получить список акций для {partner_code}")
-        return jsonify({"promotions": []}), 404
     if not promotions_list:
-        logger.info(f"Акций нет для {partner_code}")
         return jsonify({"promotions": []}), 404
     enriched = []
     for promo in promotions_list:
