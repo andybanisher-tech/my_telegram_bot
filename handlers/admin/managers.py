@@ -13,6 +13,10 @@ router = Router()
 logger = logging.getLogger(__name__)
 
 
+@router.message()
+async def catch_all(message: types.Message):
+    print(f"CATCH ALL in managers: {message.text}")
+
 def get_manager_management_keyboard():
     builder = InlineKeyboardBuilder()
     builder.button(text="➕ Добавить менеджера", callback_data="manager_add")
@@ -21,6 +25,7 @@ def get_manager_management_keyboard():
     builder.button(text="◀️ Назад", callback_data="manager_back")
     builder.adjust(1)
     return builder.as_markup()
+
 
 def get_managers_list_keyboard():
     managers = db.get_db_managers()
