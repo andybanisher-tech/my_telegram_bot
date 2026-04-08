@@ -11,6 +11,10 @@ logger = logging.getLogger(__name__)
 
 # Базовый URL веб-сервера с акциями (будет взят из .env)
 BASE_WEB_URL = os.getenv("BASE_WEB_URL")
+if not BASE_WEB_URL:
+    logger.error("BASE_WEB_URL не задан в .env")
+    await message.answer("❌ Ошибка: не настроен адрес веб-сервера. Обратитесь к администратору.")
+    return
 
 async def fetch_and_show_banners(message: types.Message, user_id: int, company_code: str, brand_filter: str = None):
     """
