@@ -1,6 +1,9 @@
-import database as db
+import asyncio
+import logging
 from aiogram import Router, types, F
 from aiogram.fsm.context import FSMContext
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
+import database as db
 from utils.helpers import is_manager
 from keyboards.common import (
     get_main_keyboard, get_phone_keyboard, get_back_to_main_keyboard,
@@ -13,13 +16,17 @@ from handlers.banners import fetch_and_show_banners
 from handlers.partner_actions import partner_actions_start
 from handlers.bonus import show_company_selection, fetch_and_show_balance, fetch_and_show_history
 from states import states
+import promo_client
 
+logger = logging.getLogger(__name__)
 router = Router()
+
+BASE_WEB_URL = os.getenv("BASE_WEB_URL", "https://news-bot-stalker.ru")
 
 async def show_main_menu(chat_id: int, user_id: int, bot):
     await bot.send_message(chat_id, "Главное меню:", reply_markup=get_main_keyboard(user_id))
 
-# ---------- Новые функции для вызова из text_handler ----------
+# ---------- Функции для вызова из text_handler ----------
 async def show_balance(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
     company = await show_company_selection(user_id, message, "balance")
@@ -38,12 +45,9 @@ async def show_companies(message: types.Message, state: FSMContext):
     if not phone:
         await state.set_state(states.CompanyProcess.waiting_for_phone)
         await message.answer(
-    "🔐 *Для доступа к информации о компаниях требуется подтверждение номера телефона.*\n\n"
-    "Нажмите на кнопку ниже, чтобы поделиться номером, который вы использовали при регистрации в нашем магазине.\n"
-    "Telegram автоматически подтвердит, что номер ваш — никаких SMS не потребуется.",
-    parse_mode="Markdown",
-    reply_markup=get_phone_keyboard()
-)
+            "Для просмотра компаний поделись своим номером телефона.",
+            reply_markup=get_phone_keyboard()
+        )
         return
     companies = db.get_user_companies(user_id)
     if companies:
@@ -70,7 +74,6 @@ async def show_banners(message: types.Message, state: FSMContext, brand: str = N
     if len(companies) == 1:
         await fetch_and_show_banners(message, user_id, companies[0]['code'], brand)
     else:
-        # Сохраняем бренд в состоянии, чтобы потом использовать при выборе компании
         await state.update_data(brand_filter=brand)
         await state.set_state(states.BannersProcess.choosing_company)
         await message.answer(
@@ -79,12 +82,27 @@ async def show_banners(message: types.Message, state: FSMContext, brand: str = N
         )
 
 async def show_banners_for_partner(message: types.Message, state: FSMContext, partner_id: str):
-    """Показывает акции для указанного контрагента (только для менеджеров)."""
-    user_id = message.from_user.id
-    if not is_manager(user_id):
-        await message.answer("⛔ У вас нет прав для просмотра акций других контрагентов.")
+    """Показывает акции для указанного ID контрагента (для менеджеров)."""
+    wait_msg = await message.answer("⏳ Проверяем акции для контрагента...")
+    promotions = await asyncio.to_thread(promo_client.get_promotions_list_sync, partner_id)
+    if not promotions:
+        await wait_msg.delete()
+        await message.answer("❌ Для указанного контрагента нет активных акций.")
         return
-    await fetch_and_show_banners(message, user_id, partner_id, brand_filter=None)
+    web_app_url = f"{BASE_WEB_URL}/promo/{partner_id}"
+    web_app_button = InlineKeyboardButton(
+        text="🎁 Открыть акции",
+        web_app=WebAppInfo(url=web_app_url)
+    )
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[[web_app_button]])
+    await wait_msg.delete()
+    await message.answer(
+        f"🎁 *Акции для контрагента {partner_id}*\n\n"
+        "Нажмите на кнопку ниже, чтобы открыть страницу с предложениями.",
+        parse_mode="Markdown",
+        reply_markup=keyboard
+    )
+    await message.answer("Выберите действие:", reply_markup=get_back_to_main_keyboard())
 
 async def show_bonus(message: types.Message, state: FSMContext):
     await message.answer("Выберите раздел:", reply_markup=get_bonus_submenu_keyboard())
@@ -122,7 +140,7 @@ async def show_help(message: types.Message, state: FSMContext):
     help_text += "\nЕсли у вас есть вопросы, обратитесь к администратору."
     await message.answer(help_text, parse_mode="Markdown")
 
-# ---------- Оригинальный обработчик кнопок главного меню (без изменений) ----------
+# ---------- Обработчики кнопок главного меню ----------
 @router.message(F.text.in_([
     "📰 Подписаться на новости", "📋 Мои подписки", "🏢 Мои компании",
     "🎁 Текущие акции", "🎁 Реферальная программа", "👥 Акции контрагента",

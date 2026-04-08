@@ -1,7 +1,9 @@
 from aiogram import Router, types, F
 from aiogram.fsm.context import FSMContext
-from intent_classifier import get_intent, load_llm_model, extract_brand, extract_partner_id
+from intent_classifier import get_intent, load_llm_model, extract_brand
 import logging
+import re
+import asyncio
 
 from . import main_menu
 from utils.helpers import is_manager
@@ -11,8 +13,16 @@ logger = logging.getLogger(__name__)
 
 llm = load_llm_model()
 
+def extract_partner_id(text: str):
+    """Извлекает ID контрагента (буква + цифры) из текста."""
+    match = re.search(r'([a-zA-Zа-яА-Я])(\d+)', text)
+    if match:
+        return match.group(1) + match.group(2)
+    return None
+
 @router.message(F.text)
 async def handle_text(message: types.Message, state: FSMContext):
+    global llm
     user_id = message.from_user.id
     text = message.text.strip()
 
@@ -23,32 +33,31 @@ async def handle_text(message: types.Message, state: FSMContext):
 
     if llm is None:
         logger.warning("Модель не загружена, попытка перезагрузить...")
-        global llm
         llm = load_llm_model()
 
     intent = get_intent(text, llm)
     logger.info(f"Определён интент: {intent} для текста: {text}")
 
-    if intent == "banners":
-        # Проверяем, не указан ли ID контрагента
-        partner_id = extract_partner_id(text)
-        if partner_id and is_manager(user_id):
-            # Менеджер запрашивает акции для конкретного контрагента
-            await main_menu.show_banners_for_partner(message, state, partner_id)
-            return
-        # Иначе пробуем извлечь бренд
+    if intent == "balance":
+        await main_menu.show_balance(message, state)
+    elif intent == "history":
+        await main_menu.show_history(message, state)
+    elif intent == "companies":
+        await main_menu.show_companies(message, state)
+    elif intent == "banners":
+        # Если пользователь менеджер, пробуем извлечь ID контрагента
+        if is_manager(user_id):
+            partner_id = extract_partner_id(text)
+            if partner_id:
+                await main_menu.show_banners_for_partner(message, state, partner_id)
+                return
+        # Обычная логика для пользователей
         brand = extract_brand(text, llm) if llm else None
         if brand:
             logger.info(f"Извлечён бренд: {brand} для текста: {text}")
         else:
             logger.info(f"Бренд не найден для текста: {text}")
         await main_menu.show_banners(message, state, brand)
-    elif intent == "balance":
-        await main_menu.show_balance(message, state)
-    elif intent == "history":
-        await main_menu.show_history(message, state)
-    elif intent == "companies":
-        await main_menu.show_companies(message, state)
     elif intent == "bonus":
         await main_menu.show_bonus(message, state)
     elif intent == "subscribe":
