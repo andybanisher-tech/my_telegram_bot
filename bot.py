@@ -68,3 +68,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
+print("Зарегистрированные роутеры:")
+for router in dp.sub_routers:
+    print(router)    
