@@ -41,6 +41,7 @@ def get_admins_list_keyboard(static_admins):
 
 @router.message(Command("manage_admins"))
 async def cmd_manage_admins(message: types.Message, state: FSMContext):
+    print(f"DEBUG: {message.text} получена")
     if not is_admin(message.from_user.id):
         await message.answer("⛔ Доступ запрещён.")
         return
