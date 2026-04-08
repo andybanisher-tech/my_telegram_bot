@@ -3,7 +3,6 @@ from aiogram.fsm.context import FSMContext
 from intent_classifier import get_intent, load_llm_model, extract_brand
 import logging
 import re
-import asyncio
 
 from . import main_menu
 from utils.helpers import is_manager
@@ -14,19 +13,10 @@ logger = logging.getLogger(__name__)
 llm = load_llm_model()
 
 def extract_partner_id(text: str):
-    """Извлекает ID контрагента (буква + цифры) из текста. Буква может быть русской или английской."""
-    # Удаляем лишние пробелы и приводим к нижнему регистру для единообразия
-    text_clean = text.strip().lower()
-    # Ищем последовательность: одна буква (кириллица или латиница) + цифры
-    match = re.search(r'([a-zа-я])(\d+)', text_clean)
+    match = re.search(r'([a-zA-Zа-яА-Я])(\d+)', text)
     if match:
-        # Возвращаем оригинальный регистр буквы? Лучше вернуть как есть, но для API обычно нужен оригинал
-        # Поскольку мы привели к нижнему регистру, восстановим букву из оригинального текста
-        original_letter = text[text.lower().find(match.group(1))]  # костыль, но работает
-        return original_letter + match.group(2)
+        return match.group(1) + match.group(2)
     return None
-
-
 
 @router.message(F.text, lambda msg: not msg.text.startswith('/'))
 async def handle_text(message: types.Message, state: FSMContext):
@@ -34,9 +24,13 @@ async def handle_text(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
     text = message.text.strip()
 
-    if len(text) < 2:
+    # Если пользователь находится в каком-либо FSM-состоянии, пропускаем
+    current_state = await state.get_state()
+    if current_state is not None:
+        logger.info(f"Пользователь {user_id} в состоянии {current_state}, пропускаем text_handler")
         return
-    if text.startswith('/'):
+
+    if len(text) < 2:
         return
 
     if llm is None:
@@ -53,16 +47,11 @@ async def handle_text(message: types.Message, state: FSMContext):
     elif intent == "companies":
         await main_menu.show_companies(message, state)
     elif intent == "banners":
-        # Проверяем, менеджер ли пользователь
-        is_man = is_manager(user_id)
-        logger.info(f"Пользователь {user_id} является менеджером: {is_man}")
-        if is_man:
+        if is_manager(user_id):
             partner_id = extract_partner_id(text)
-            logger.info(f"Извлечённый ID контрагента: {partner_id}")
             if partner_id:
                 await main_menu.show_banners_for_partner(message, state, partner_id)
                 return
-        # Обычная логика для пользователей
         brand = extract_brand(text, llm) if llm else None
         if brand:
             logger.info(f"Извлечён бренд: {brand} для текста: {text}")
