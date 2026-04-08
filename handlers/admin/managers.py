@@ -13,9 +13,6 @@ router = Router()
 logger = logging.getLogger(__name__)
 
 
-@router.message()
-async def catch_all(message: types.Message):
-    print(f"CATCH ALL in managers: {message.text}")
 
 def get_manager_management_keyboard():
     builder = InlineKeyboardBuilder()
@@ -182,3 +179,7 @@ async def manager_cancel(callback: types.CallbackQuery, state: FSMContext):
         reply_markup=get_manager_management_keyboard()
     )
     await callback.answer()
+
+@router.message()
+async def catch_all(message: types.Message):
+    print(f"CATCH ALL in managers: {message.text}")   
