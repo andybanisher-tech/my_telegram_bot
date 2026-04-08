@@ -27,7 +27,7 @@ def clean_text(text):
         return ""
     return re.sub(r'[\ud800-\udfff]', '', text)
 
-# HTML_TEMPLATE тот же, но в fetch используем полный URL
+
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="ru">
@@ -41,6 +41,7 @@ HTML_TEMPLATE = """
     <meta property="og:image" content="https://stalker-co.ru/local/templates/stalker/images/logo.png" />
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
+        /* CSS-переменные для светлой темы (по умолчанию) */
         :root {
             --bg-color: #ffffff;
             --text-color: #1c1c1e;
@@ -52,6 +53,7 @@ HTML_TEMPLATE = """
             --button-bg: #007aff;
             --button-hover: #005fc1;
         }
+        /* Тёмная тема */
         body.dark {
             --bg-color: #000000;
             --text-color: #ffffff;
@@ -108,18 +110,30 @@ HTML_TEMPLATE = """
         @media (max-width: 480px) { body { padding: 12px; } .promo-card { padding: 16px; } .promo-title { font-size: 18px; } }
     </style>
     <script>
-        const tg = window.Telegram.WebApp;
-        tg.ready();
-        if (tg.colorScheme === 'dark') {
-            document.body.classList.add('dark');
-        }
-        tg.onEvent('themeChanged', () => {
-            if (tg.colorScheme === 'dark') {
+        // Функция для применения темы
+        function applyTheme() {
+            var tg = window.Telegram && window.Telegram.WebApp;
+            var isDark = false;
+            if (tg && tg.colorScheme) {
+                isDark = (tg.colorScheme === 'dark');
+            } else {
+                // Fallback: системная тема
+                isDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+            }
+            if (isDark) {
                 document.body.classList.add('dark');
             } else {
                 document.body.classList.remove('dark');
             }
-        });
+        }
+
+        // Инициализация WebApp и применение темы
+        var tg = window.Telegram && window.Telegram.WebApp;
+        if (tg) {
+            tg.ready();
+            tg.onEvent('themeChanged', applyTheme);
+        }
+        applyTheme();
     </script>
 </head>
 <body>
@@ -139,9 +153,7 @@ HTML_TEMPLATE = """
                 return m;
             });
         }
-        // Используем полный URL, чтобы избежать проблем с относительными путями в WebView
-        const dataUrl = window.location.origin + window.location.pathname + '/data';
-        fetch(dataUrl)
+        fetch(window.location.href + '/data')
             .then(response => response.json())
             .then(data => {
                 const container = document.getElementById('content');
