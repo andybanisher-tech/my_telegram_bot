@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 llm = load_llm_model()
 
 def extract_partner_id(text: str):
-    """Извлекает ID контрагента (буква + цифры) из текста."""
+    """Извлекает ID контрагента (буква + цифры) из текста. Буква может быть русской или английской."""
     match = re.search(r'([a-zA-Zа-яА-Я])(\d+)', text)
     if match:
         return match.group(1) + match.group(2)
@@ -45,9 +45,10 @@ async def handle_text(message: types.Message, state: FSMContext):
     elif intent == "companies":
         await main_menu.show_companies(message, state)
     elif intent == "banners":
-        # Если пользователь менеджер, пробуем извлечь ID контрагента
+        # Проверяем, менеджер ли пользователь
         if is_manager(user_id):
             partner_id = extract_partner_id(text)
+            logger.info(f"Менеджер {user_id}, извлечённый ID контрагента: {partner_id}")
             if partner_id:
                 await main_menu.show_banners_for_partner(message, state, partner_id)
                 return
