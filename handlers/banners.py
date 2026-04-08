@@ -1,32 +1,27 @@
 import asyncio
-import os
 from aiogram import Router, types
 from aiogram.fsm.context import FSMContext
 from keyboards.common import get_back_to_main_keyboard
 from states import states
 import logging
+import os
 
 router = Router()
 logger = logging.getLogger(__name__)
 
-# Базовый URL веб-сервера с акциями (будет взят из .env)
+# Базовый URL веб-сервера
 BASE_WEB_URL = os.getenv("BASE_WEB_URL")
-if not BASE_WEB_URL:
-    logger.error("BASE_WEB_URL не задан в .env")
-    await message.answer("❌ Ошибка: не настроен адрес веб-сервера. Обратитесь к администратору.")
-    return
 
 async def fetch_and_show_banners(message: types.Message, user_id: int, company_code: str, brand_filter: str = None):
-    """
-    Отправляет пользователю ссылку на веб-страницу со списком акций.
-    Больше не генерирует длинное HTML-сообщение в чате.
-    """
+    if not BASE_WEB_URL:
+        await message.answer("❌ Ошибка: не настроен адрес веб-сервера. Обратитесь к администратору.")
+        return
+
     await message.answer("⏳ Готовим подборку акций...")
     
     # Формируем URL для веб-страницы
     promo_url = f"{BASE_WEB_URL}/promo/{company_code}"
     if brand_filter:
-        # Если нужна фильтрация по бренду, добавляем параметр запроса
         promo_url += f"?brand={brand_filter}"
     
     # Отправляем ссылку. Telegram сам подхватит Open Graph мета-теги и покажет превью
@@ -35,7 +30,7 @@ async def fetch_and_show_banners(message: types.Message, user_id: int, company_c
         f"Нажмите на кнопку ниже, чтобы открыть страницу с предложениями.\n\n"
         f"🔗 [Открыть страницу с акциями]({promo_url})",
         parse_mode="Markdown",
-        disable_web_page_preview=False  # Разрешаем показывать превью
+        disable_web_page_preview=False
     )
     await message.answer("Выберите действие:", reply_markup=get_back_to_main_keyboard())
 
