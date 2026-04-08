@@ -1,11 +1,14 @@
 import os
-from flask import Flask, render_template_string, abort
-import promo_client  # Импортируем вашу существующую логику
 import asyncio
+import logging
+from flask import Flask, render_template_string, abort
+import promo_client
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
-# Шаблон HTML-страницы
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="ru">
@@ -178,25 +181,26 @@ HTML_TEMPLATE = """
 """
 
 def run_async(coro):
-    """Вспомогательная функция для запуска асинхронного кода из синхронного Flask"""
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
     try:
-        return loop.run_until_complete(coro)
-    finally:
-        loop.close()
+        loop = asyncio.get_event_loop()
+        if loop.is_closed():
+            raise RuntimeError("Event loop closed")
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    return loop.run_until_complete(coro)
 
 @app.route('/promo/<partner_code>')
 def promo_page(partner_code):
-    """
-    Генерирует HTML-страницу с акциями для указанного партнера.
-    Пример URL: https://your-domain.com/promo/С88201
-    """
-    # Получаем список акций через вашу существующую функцию
-    promotions_list = run_async(promo_client.get_promotions_list(partner_code))
+    logger.info(f"Запрос страницы для партнера {partner_code}")
+    try:
+        promotions_list = run_async(promo_client.get_promotions_list(partner_code))
+        logger.info(f"Получено акций из первого запроса: {len(promotions_list) if promotions_list else 0}")
+    except Exception as e:
+        logger.error(f"Ошибка при получении списка акций: {e}")
+        promotions_list = []
     
     if not promotions_list:
-        # Если акций нет, показываем страницу-заглушку
         return render_template_string(HTML_TEMPLATE, promotions=[]), 404
 
     enriched_promos = []
@@ -204,14 +208,12 @@ def promo_page(partner_code):
         promo_id = promo.get('id')
         if not promo_id:
             continue
-        
-        # Очищаем ID от ведущих нулей
         clean_id = str(int(promo_id)) if promo_id.isdigit() else promo_id
-        
-        # Пытаемся получить детали
-        details = run_async(promo_client.get_promotion_details(clean_id))
-        
-        # Собираем итоговый словарь: приоритет у деталей из второго запроса
+        try:
+            details = run_async(promo_client.get_promotion_details(clean_id))
+        except Exception as e:
+            logger.error(f"Ошибка при получении деталей акции {clean_id}: {e}")
+            details = None
         enriched = {
             'name': details.get('name') if details else promo.get('name', 'Акция'),
             'description': details.get('description') if details else '',
@@ -222,14 +224,13 @@ def promo_page(partner_code):
             'date_from': promo.get('date_from', '')
         }
         enriched_promos.append(enriched)
-
+    
+    logger.info(f"Сформировано {len(enriched_promos)} акций для отображения")
     return render_template_string(HTML_TEMPLATE, promotions=enriched_promos)
 
 @app.route('/health')
 def health_check():
-    """Эндпоинт для проверки работоспособности сервера"""
     return "OK", 200
 
 if __name__ == '__main__':
-    # Для локальной отладки
     app.run(host='0.0.0.0', port=8000)
