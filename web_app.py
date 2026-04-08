@@ -32,6 +32,7 @@ HTML_TEMPLATE = """
     <meta property="og:image" content="https://stalker-co.ru/local/templates/stalker/images/logo.png" />
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
+        /* CSS переменные для светлой темы (по умолчанию) */
         :root {
             --bg-color: #ffffff;
             --text-color: #1c1c1e;
@@ -43,6 +44,7 @@ HTML_TEMPLATE = """
             --button-bg: #007aff;
             --button-hover: #005fc1;
         }
+        /* Тёмная тема (класс dark) */
         body.dark {
             --bg-color: #000000;
             --text-color: #ffffff;
@@ -99,16 +101,24 @@ HTML_TEMPLATE = """
         @media (max-width: 480px) { body { padding: 12px; } .promo-card { padding: 16px; } .promo-title { font-size: 18px; } }
     </style>
     <script>
-        const tg = window.Telegram.WebApp;
-        tg.ready();
-        if (tg.colorScheme === 'dark') {
-            document.body.classList.add('dark');
+        // Функция для применения темы
+        function applyTheme() {
+            if (window.Telegram && Telegram.WebApp) {
+                const tg = Telegram.WebApp;
+                if (tg.colorScheme === 'dark') {
+                    document.body.classList.add('dark');
+                } else {
+                    document.body.classList.remove('dark');
+                }
+            }
         }
-        tg.onEvent('themeChanged', () => {
-            if (tg.colorScheme === 'dark') {
-                document.body.classList.add('dark');
-            } else {
-                document.body.classList.remove('dark');
+        // Дожидаемся загрузки DOM
+        document.addEventListener('DOMContentLoaded', function() {
+            applyTheme();
+            // Подписываемся на изменение темы в Telegram
+            if (window.Telegram && Telegram.WebApp) {
+                Telegram.WebApp.onEvent('themeChanged', applyTheme);
+                Telegram.WebApp.ready();
             }
         });
     </script>
@@ -119,7 +129,7 @@ HTML_TEMPLATE = """
         <div class="sub">Персональные предложения</div>
         <div class="loader">⏳ Загружаем акции...</div>
     </div>
-    <div class="footer">Stalker-Co</div>
+    <div class="footer">Stalker-Co — всё для профессионалов</div>
     <script>
         function escapeHtml(str) {
             if (!str) return '';
@@ -131,7 +141,12 @@ HTML_TEMPLATE = """
             });
         }
         fetch(window.location.href + '/data')
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('HTTP error ' + response.status);
+                }
+                return response.json();
+            })
             .then(data => {
                 const container = document.getElementById('content');
                 if (data.promotions && data.promotions.length) {
@@ -170,8 +185,13 @@ def promo_page(partner_code):
 
 @app.route('/promo/<partner_code>/data')
 def promo_data(partner_code):
+    logger.info(f"Запрос данных для {partner_code}")
     promotions_list = promo_client.get_promotions_list_sync(partner_code)
+    if promotions_list is None:
+        logger.error(f"Не удалось получить список акций для {partner_code}")
+        return jsonify({"promotions": []}), 404
     if not promotions_list:
+        logger.info(f"Акций нет для {partner_code}")
         return jsonify({"promotions": []}), 404
     enriched = []
     for promo in promotions_list:
