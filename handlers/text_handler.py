@@ -15,9 +15,15 @@ llm = load_llm_model()
 
 def extract_partner_id(text: str):
     """Извлекает ID контрагента (буква + цифры) из текста. Буква может быть русской или английской."""
-    match = re.search(r'([a-zA-Zа-яА-Я])(\d+)', text)
+    # Удаляем лишние пробелы и приводим к нижнему регистру для единообразия
+    text_clean = text.strip().lower()
+    # Ищем последовательность: одна буква (кириллица или латиница) + цифры
+    match = re.search(r'([a-zа-я])(\d+)', text_clean)
     if match:
-        return match.group(1) + match.group(2)
+        # Возвращаем оригинальный регистр буквы? Лучше вернуть как есть, но для API обычно нужен оригинал
+        # Поскольку мы привели к нижнему регистру, восстановим букву из оригинального текста
+        original_letter = text[text.lower().find(match.group(1))]  # костыль, но работает
+        return original_letter + match.group(2)
     return None
 
 @router.message(F.text)
@@ -46,9 +52,11 @@ async def handle_text(message: types.Message, state: FSMContext):
         await main_menu.show_companies(message, state)
     elif intent == "banners":
         # Проверяем, менеджер ли пользователь
-        if is_manager(user_id):
+        is_man = is_manager(user_id)
+        logger.info(f"Пользователь {user_id} является менеджером: {is_man}")
+        if is_man:
             partner_id = extract_partner_id(text)
-            logger.info(f"Менеджер {user_id}, извлечённый ID контрагента: {partner_id}")
+            logger.info(f"Извлечённый ID контрагента: {partner_id}")
             if partner_id:
                 await main_menu.show_banners_for_partner(message, state, partner_id)
                 return
