@@ -1,8 +1,7 @@
 import asyncio
+import os
 from aiogram import Router, types
 from aiogram.fsm.context import FSMContext
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-import promo_client
 from keyboards.common import get_back_to_main_keyboard
 from states import states
 import logging
@@ -10,82 +9,30 @@ import logging
 router = Router()
 logger = logging.getLogger(__name__)
 
+# Базовый URL веб-сервера с акциями (будет взят из .env)
+BASE_WEB_URL = os.getenv("BASE_WEB_URL", "https://your-domain.com")
+
 async def fetch_and_show_banners(message: types.Message, user_id: int, company_code: str, brand_filter: str = None):
-    await message.answer("⏳ Загружаем акции...")
-    promotions = await promo_client.get_promotions_list(company_code)
-    if not promotions:
-        await message.answer("❌ Не удалось загрузить список акций или акций нет.")
-        return
-
-    # Фильтрация по бренду (mark)
+    """
+    Отправляет пользователю ссылку на веб-страницу со списком акций.
+    Больше не генерирует длинное HTML-сообщение в чате.
+    """
+    await message.answer("⏳ Готовим подборку акций...")
+    
+    # Формируем URL для веб-страницы
+    promo_url = f"{BASE_WEB_URL}/promo/{company_code}"
     if brand_filter:
-        brand_filter_lower = brand_filter.lower()
-        filtered = []
-        for promo in promotions:
-            mark = promo.get('mark', '')
-            if mark and brand_filter_lower in mark.lower():
-                filtered.append(promo)
-        promotions = filtered
-        if not promotions:
-            await message.answer(f"❌ Нет акций для бренда «{brand_filter}».")
-            return
-
-    # Формируем HTML-сообщение
-    html_parts = ["<b>🎁 Акции для вас</b>\n\n"]
-
-    for promo in promotions:
-        promo_id = promo.get('id')
-        if not promo_id:
-            continue
-
-        # Пытаемся получить детали
-        clean_id = str(int(promo_id)) if promo_id.isdigit() else promo_id
-        details = await promo_client.get_promotion_details(clean_id)
-        if details:
-            name = details.get('name') or promo.get('name', 'Акция')
-            description = details.get('description') or ''
-            image = details.get('image')
-            link = details.get('link')
-        else:
-            name = promo.get('name', 'Акция')
-            description = ''
-            image = None
-            link = None
-
-        date_to = promo.get('date_to')
-        block = f"<b>{name}</b>"
-        if date_to:
-            block += f"\n📅 Действует до: {date_to}"
-        if description:
-            block += f"\n{description}"
-        if image:
-            block += f'\n<a href="{image}">🖼️ Превью акции</a>'
-        if link:
-            if not link.startswith(('http://', 'https://')):
-                link = 'https://' + link
-            block += f'\n<a href="{link}">🔗 Подробнее на сайте</a>'
-        block += "\n" + "-" * 30 + "\n"
-        html_parts.append(block)
-
-    full_html = "\n".join(html_parts)
-
-    # Telegram ограничивает длину сообщения 4096 символов
-    if len(full_html) > 4000:
-        # Разбиваем на части
-        parts = []
-        current = "<b>🎁 Акции для вас</b>\n\n"
-        for line in full_html.split("\n"):
-            if len(current) + len(line) + 1 > 4000:
-                parts.append(current)
-                current = "<b>🎁 Акции для вас (продолжение)</b>\n\n"
-            current += line + "\n"
-        if current:
-            parts.append(current)
-        for part in parts:
-            await message.answer(part, parse_mode="HTML", disable_web_page_preview=False)
-    else:
-        await message.answer(full_html, parse_mode="HTML", disable_web_page_preview=False)
-
+        # Если нужна фильтрация по бренду, добавляем параметр запроса
+        promo_url += f"?brand={brand_filter}"
+    
+    # Отправляем ссылку. Telegram сам подхватит Open Graph мета-теги и покажет превью
+    await message.answer(
+        f"🎁 *Ваша персональная подборка акций готова!*\n\n"
+        f"Нажмите на кнопку ниже, чтобы открыть страницу с предложениями.\n\n"
+        f"🔗 [Открыть страницу с акциями]({promo_url})",
+        parse_mode="Markdown",
+        disable_web_page_preview=False  # Разрешаем показывать превью
+    )
     await message.answer("Выберите действие:", reply_markup=get_back_to_main_keyboard())
 
 @router.callback_query(lambda c: c.data.startswith('banner_comp_'), states.BannersProcess.choosing_company)
