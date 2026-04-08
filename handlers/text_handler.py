@@ -1,4 +1,5 @@
 from aiogram import Router, types, F
+from aiogram.filters import BaseFilter
 from aiogram.fsm.context import FSMContext
 from intent_classifier import get_intent, load_llm_model, extract_brand
 import logging
@@ -18,17 +19,16 @@ def extract_partner_id(text: str):
         return match.group(1) + match.group(2)
     return None
 
-@router.message(F.text, lambda msg: not msg.text.startswith('/'))
+class NoActiveStateFilter(BaseFilter):
+    async def __call__(self, message: types.Message, state: FSMContext) -> bool:
+        current_state = await state.get_state()
+        return current_state is None
+
+@router.message(NoActiveStateFilter(), F.text, lambda msg: not msg.text.startswith('/'))
 async def handle_text(message: types.Message, state: FSMContext):
     global llm
     user_id = message.from_user.id
     text = message.text.strip()
-
-    # Если пользователь находится в каком-либо FSM-состоянии, пропускаем
-    current_state = await state.get_state()
-    if current_state is not None:
-        logger.info(f"Пользователь {user_id} в состоянии {current_state}, пропускаем text_handler")
-        return
 
     if len(text) < 2:
         return
