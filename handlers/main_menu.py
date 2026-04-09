@@ -1,12 +1,12 @@
 import os
 import asyncio
 import logging
-import soap_client
 from aiogram import Router, types, F
 from aiogram.fsm.context import FSMContext
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 import database as db
 import promo_client
+import bitrix_client
 from utils.helpers import is_manager
 from keyboards.common import (
     get_main_keyboard, get_phone_keyboard, get_back_to_main_keyboard,
@@ -83,31 +83,37 @@ async def show_banners(message: types.Message, state: FSMContext, brand: str = N
             reply_markup=get_company_selection_keyboard(companies)
         )
 
-async def show_banners_for_partner(message: types.Message, state: FSMContext, partner_id: str):
+async def show_banners_for_partner(message: types.Message, state: FSMContext, partner_id: str, partner_name: str):
     """Показывает акции для указанного ID контрагента (для менеджеров)."""
-    wait_msg = await message.answer("⏳ Проверяем акции для контрагента...")
-    
-    # Получаем информацию о контрагенте
-    partner_info = await soap_client.get_partner_by_id(partner_id)
-    if not partner_info:
+    wait_msg = await message.answer(f"⏳ Проверяем акции для контрагента {partner_id}...")
+    promotions = await asyncio.to_thread(promo_client.get_promotions_list_sync, partner_id)
+    if not promotions:
         await wait_msg.delete()
-        await message.answer("❌ Контрагент с таким ID не найден.")
+        # Предлагаем все акции сайта
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🌐 Все акции сайта", web_app=WebAppInfo(url=f"{BASE_WEB_URL}/promo/{partner_id}?all=1&name={partner_name}"))]
+        ])
+        await message.answer(
+            f"❌ Для контрагента {partner_name} (ID {partner_id}) нет персональных акций.\n"
+            "Вы можете посмотреть все действующие акции на сайте:",
+            reply_markup=keyboard
+        )
+        await message.answer("Выберите действие:", reply_markup=get_back_to_main_keyboard())
         return
-    
-    partner_name = partner_info.get('name', partner_id)
-    
-    # Сохраняем данные для последующего использования в колбэке выбора компании
-    await state.update_data(partner_name=partner_name, is_manager_request=True)
-    
-    # Проверяем, есть ли у менеджера свои компании (не обязательно, но для логики)
-    companies = db.get_user_companies(message.from_user.id)
-    if len(companies) == 1:
-        # Если у менеджера одна компания, используем её код как company_code (но для менеджера company_code — это код его компании? Нет, для запроса акций для контрагента нужен ID контрагента, а не компании менеджера. Поэтому company_code = partner_id)
-        await fetch_and_show_banners(message, message.from_user.id, partner_id, None, partner_name, True)
-    else:
-        # Если несколько компаний, нужно выбрать, от имени какой компании делать запрос? Для запроса акций контрагента company_code — это ID контрагента, а не компании менеджера. Поэтому не нужно выбирать компанию менеджера. Просто сразу передаём partner_id.
-        # Убираем выбор компании, так как company_code уже известен.
-        await fetch_and_show_banners(message, message.from_user.id, partner_id, None, partner_name, True)
+    web_app_url = f"{BASE_WEB_URL}/promo/{partner_id}?name={partner_name}"
+    web_app_button = InlineKeyboardButton(
+        text="🎁 Открыть акции",
+        web_app=WebAppInfo(url=web_app_url)
+    )
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[[web_app_button]])
+    await wait_msg.delete()
+    await message.answer(
+        f"🎁 *Акции для контрагента {partner_name} (ID {partner_id})*\n\n"
+        "Нажмите на кнопку ниже, чтобы открыть страницу с предложениями.",
+        parse_mode="Markdown",
+        reply_markup=keyboard
+    )
+    await message.answer("Выберите действие:", reply_markup=get_back_to_main_keyboard())
 
 async def show_bonus(message: types.Message, state: FSMContext):
     await message.answer("Выберите раздел:", reply_markup=get_bonus_submenu_keyboard())

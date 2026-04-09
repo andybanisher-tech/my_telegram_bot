@@ -5,7 +5,7 @@ from . import subscriptions
 from . import banners
 from . import partner_actions
 from . import bonus
-from . import text_handler  # новый
+from . import text_handler
 from .admin import news as admin_news
 from .admin import categories as admin_categories
 from .admin import admins as admin_admins

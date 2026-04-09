@@ -4,11 +4,10 @@ from aiogram.fsm.context import FSMContext
 from intent_classifier import get_intent, load_llm_model, extract_brand
 import logging
 import re
+import soap_client
 
 from . import main_menu
 from utils.helpers import is_manager
-import soap_client  # добавлен
-import bitrix_client  # может понадобиться
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -52,7 +51,10 @@ async def handle_text(message: types.Message, state: FSMContext):
         if is_manager(user_id):
             partner_id = extract_partner_id(text)
             if partner_id:
-                await main_menu.show_banners_for_partner(message, state, partner_id)
+                # Получаем имя контрагента для заголовка
+                partner_info = await soap_client.get_partner_by_id(partner_id)
+                partner_name = partner_info['name'] if partner_info else partner_id
+                await main_menu.show_banners_for_partner(message, state, partner_id, partner_name)
                 return
         brand = extract_brand(text, llm) if llm else None
         if brand:
