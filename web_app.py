@@ -5,7 +5,7 @@ from flask import Flask, render_template_string, jsonify, request
 from dotenv import load_dotenv
 from pathlib import Path
 import promo_client
-import bitrix_client
+import bitrix_client  # добавим импорт
 
 env_path = Path(__file__).parent / '.env'
 load_dotenv(dotenv_path=env_path)
@@ -104,8 +104,8 @@ HTML_TEMPLATE = """
 </head>
 <body>
     <div class="container" id="content">
-        <h1>🎁 Акции для вас</h1>
-        <div class="sub">Персональные предложения</div>
+        <h1 id="mainTitle">🎁 Акции для вас</h1>
+        <div class="sub" id="subTitle">Персональные предложения</div>
         <div class="loader">⏳ Загружаем акции...</div>
     </div>
     <div class="footer">Stalker-Co — всё для профессионалов</div>
@@ -138,20 +138,18 @@ HTML_TEMPLATE = """
         const urlParams = new URLSearchParams(window.location.search);
         const brandFilter = urlParams.get('brand');
         const partnerName = urlParams.get('partner_name');
-        const allSite = urlParams.get('all_site');
-        
-        let dataUrl = window.location.pathname + '/data';
-        const queryParams = new URLSearchParams();
-        if (brandFilter) queryParams.append('brand', brandFilter);
-        if (allSite === '1') queryParams.append('all_site', '1');
-        if (queryParams.toString()) dataUrl += '?' + queryParams.toString();
-        
-        // Обновляем заголовок, если передан partner_name
+        const allPromos = urlParams.get('all_promos') === '1';
+
+        // Обновляем заголовок, если указано имя партнёра
         if (partnerName) {
-            document.querySelector('h1').innerText = `🎁 Акции для ${partnerName}`;
-            document.querySelector('.sub').innerText = `Контрагент: ${partnerName}`;
+            document.getElementById('mainTitle').innerHTML = `🎁 Акции для ${escapeHtml(partnerName)}`;
+            document.getElementById('subTitle').innerHTML = `Предложения для контрагента`;
+        } else if (allPromos) {
+            document.getElementById('mainTitle').innerHTML = `🎁 Все акции сайта`;
+            document.getElementById('subTitle').innerHTML = `Актуальные предложения`;
         }
-        
+
+        const dataUrl = window.location.pathname + '/data' + (brandFilter ? `?brand=${brandFilter}` : '');
         fetch(dataUrl)
             .then(response => {
                 if (!response.ok) {
@@ -162,8 +160,7 @@ HTML_TEMPLATE = """
             .then(data => {
                 const container = document.getElementById('content');
                 if (data.promotions && data.promotions.length) {
-                    let html = '<h1>' + (partnerName ? `🎁 Акции для ${partnerName}` : '🎁 Акции для вас') + '</h1>';
-                    html += '<div class="sub">' + (partnerName ? `Контрагент: ${partnerName}` : 'Персональные предложения') + '</div>';
+                    let html = '<h1>' + (partnerName ? `🎁 Акции для ${escapeHtml(partnerName)}` : (allPromos ? '🎁 Все акции сайта' : '🎁 Акции для вас')) + '</h1><div class="sub">' + (partnerName ? 'Предложения для контрагента' : (allPromos ? 'Актуальные предложения' : 'Персональные предложения')) + '</div>';
                     data.promotions.forEach(promo => {
                         html += `
                         <div class="promo-card">
@@ -180,12 +177,12 @@ HTML_TEMPLATE = """
                     });
                     container.innerHTML = html;
                 } else {
-                    container.innerHTML = '<h1>' + (partnerName ? `🎁 Акции для ${partnerName}` : '🎁 Акции для вас') + '</h1><div class="sub">' + (partnerName ? `Контрагент: ${partnerName}` : 'Персональные предложения') + '</div><div style="background: var(--card-bg); border-radius: 20px; padding: 40px 20px; text-align: center;">😔 На данный момент нет активных акций</div><div class="footer">Stalker-Co — всё для профессионалов</div>';
+                    container.innerHTML = '<h1>' + (partnerName ? `🎁 Акции для ${escapeHtml(partnerName)}` : (allPromos ? '🎁 Все акции сайта' : '🎁 Акции для вас')) + '</h1><div class="sub">' + (partnerName ? 'Предложения для контрагента' : (allPromos ? 'Актуальные предложения' : 'Персональные предложения')) + '</div><div style="background: var(--card-bg); border-radius: 20px; padding: 40px 20px; text-align: center;">😔 На данный момент нет активных акций</div><div class="footer">Stalker-Co — всё для профессионалов</div>';
                 }
             })
             .catch(error => {
                 console.error('Ошибка загрузки акций:', error);
-                document.getElementById('content').innerHTML = '<h1>' + (partnerName ? `🎁 Акции для ${partnerName}` : '🎁 Акции для вас') + '</h1><div class="sub">' + (partnerName ? `Контрагент: ${partnerName}` : 'Персональные предложения') + '</div><div style="background: var(--card-bg); border-radius: 20px; padding: 40px 20px; text-align: center;">❌ Ошибка загрузки акций. Попробуйте позже.</div><div class="footer">Stalker-Co — всё для профессионалов</div>';
+                document.getElementById('content').innerHTML = '<h1>Ошибка</h1><div style="background: var(--card-bg); border-radius: 20px; padding: 40px 20px; text-align: center;">❌ Не удалось загрузить акции. Попробуйте позже.</div><div class="footer">Stalker-Co — всё для профессионалов</div>';
             });
     </script>
 </body>
@@ -199,11 +196,11 @@ def promo_page(partner_code):
 @app.route('/promo/<partner_code>/data')
 def promo_data(partner_code):
     brand_filter = request.args.get('brand')
-    all_site = request.args.get('all_site') == '1'
+    all_promos = request.args.get('all_promos') == '1'
     
-    if all_site:
-        # Запрашиваем все акции сайта через bitrix_client
-        banners = bitrix_client.get_banners_sync(partner_code)  # нужно добавить синхронную обёртку
+    if all_promos:
+        # Запрашиваем все акции сайта
+        banners = bitrix_client.get_banners_sync(partner_code)
         if not banners:
             return jsonify({"promotions": []}), 404
         enriched = []
@@ -213,36 +210,36 @@ def promo_data(partner_code):
                 'description': clean_text(banner.get('description', '')),
                 'image': clean_text(banner.get('image')),
                 'link': clean_text(banner.get('link')),
-                'mark': '',  # у общих баннеров нет марки
+                'mark': '',
                 'date_to': clean_text(banner.get('date_to', ''))
             })
         return jsonify({"promotions": enriched})
-    
-    # Иначе персональные акции
-    promotions_list = promo_client.get_promotions_list_sync(partner_code)
-    if not promotions_list:
-        return jsonify({"promotions": []}), 404
-    enriched = []
-    for promo in promotions_list:
-        promo_id = promo.get('id')
-        if not promo_id:
-            continue
-        clean_id = str(int(promo_id)) if promo_id.isdigit() else promo_id
-        details = promo_client.get_promotion_details_sync(clean_id)
-        # Фильтруем по бренду, если задан
-        if brand_filter:
-            promo_mark = promo.get('mark', '')
-            if promo_mark.lower() != brand_filter.lower():
+    else:
+        # Персональные акции
+        promotions_list = promo_client.get_promotions_list_sync(partner_code)
+        if not promotions_list:
+            return jsonify({"promotions": []}), 404
+        enriched = []
+        for promo in promotions_list:
+            promo_id = promo.get('id')
+            if not promo_id:
                 continue
-        enriched.append({
-            'name': clean_text(details.get('name')) if details else clean_text(promo.get('name', 'Акция')),
-            'description': clean_text(details.get('description')) if details else '',
-            'image': clean_text(details.get('image')) if details else None,
-            'link': clean_text(details.get('link')) if details else None,
-            'mark': clean_text(promo.get('mark', '')),
-            'date_to': clean_text(promo.get('date_to', ''))
-        })
-    return jsonify({"promotions": enriched})
+            clean_id = str(int(promo_id)) if promo_id.isdigit() else promo_id
+            details = promo_client.get_promotion_details_sync(clean_id)
+            # Фильтруем по бренду, если задан
+            if brand_filter:
+                promo_mark = promo.get('mark', '')
+                if promo_mark.lower() != brand_filter.lower():
+                    continue
+            enriched.append({
+                'name': clean_text(details.get('name')) if details else clean_text(promo.get('name', 'Акция')),
+                'description': clean_text(details.get('description')) if details else '',
+                'image': clean_text(details.get('image')) if details else None,
+                'link': clean_text(details.get('link')) if details else None,
+                'mark': clean_text(promo.get('mark', '')),
+                'date_to': clean_text(promo.get('date_to', ''))
+            })
+        return jsonify({"promotions": enriched})
 
 @app.route('/health')
 def health_check():
