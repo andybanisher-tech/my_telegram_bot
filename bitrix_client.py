@@ -7,7 +7,6 @@ from typing import List, Dict, Any, Optional
 logger = logging.getLogger(__name__)
 
 BITRIX_API_URL = "https://stalker-co.ru:443/bitrix/tools/mlk.tgbotapi_banner.php"
-BITRIX_API_KEY = os.getenv("BITRIX_API_KEY")
 
 def parse_banner(banner: Dict[str, Any]) -> Dict[str, Any]:
     return {
@@ -19,12 +18,12 @@ def parse_banner(banner: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 async def get_banners(company_code: str) -> Optional[List[Dict[str, Any]]]:
-    if not BITRIX_API_KEY:
+    api_key = os.getenv("BITRIX_API_KEY")
+    if not api_key:
         logger.error("BITRIX_API_KEY не задан в .env")
         return None
-
     params = {
-        "key": BITRIX_API_KEY,
+        "key": api_key,
         "code": company_code
     }
     try:
@@ -40,13 +39,13 @@ async def get_banners(company_code: str) -> Optional[List[Dict[str, Any]]]:
         logger.error(f"Исключение при запросе к Bitrix API: {e}")
         return None
 
-# Синхронная версия для использования в Flask
 def get_banners_sync(company_code: str) -> Optional[List[Dict[str, Any]]]:
-    if not BITRIX_API_KEY:
+    api_key = os.getenv("BITRIX_API_KEY")
+    if not api_key:
         logger.error("BITRIX_API_KEY не задан в .env")
         return None
     params = {
-        "key": BITRIX_API_KEY,
+        "key": api_key,
         "code": company_code
     }
     try:
