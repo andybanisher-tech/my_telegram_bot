@@ -201,6 +201,7 @@ def promo_data(partner_code):
     all_mode = request.args.get('all') == '1'
     brand_filter = request.args.get('brand')
     if all_mode:
+        # Все акции сайта (старый эндпоинт)
         banners = bitrix_client.get_banners_sync(partner_code)
         if not banners:
             return jsonify({"promotions": []}), 404
@@ -211,13 +212,14 @@ def promo_data(partner_code):
                 'description': clean_text(banner.get('description', '')),
                 'image': clean_text(banner.get('image')),
                 'link': clean_text(banner.get('link')),
-                'mark': '',
+                'mark': '',  # в общих акциях нет марки
                 'date_to': clean_text(banner.get('date_to', ''))
             })
         if brand_filter:
             enriched = [p for p in enriched if brand_filter.lower() in p['name'].lower()]
         return jsonify({"promotions": enriched})
     else:
+        # Персональные акции (новый эндпоинт)
         promotions_list = promo_client.get_promotions_list_sync(partner_code)
         if not promotions_list:
             return jsonify({"promotions": []}), 404
