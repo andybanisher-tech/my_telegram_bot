@@ -1,7 +1,7 @@
 import os
 import logging
 import re
-from flask import Flask, render_template_string, jsonify
+from flask import Flask, render_template_string, jsonify, request
 from dotenv import load_dotenv
 from pathlib import Path
 import promo_client
@@ -183,13 +183,15 @@ def promo_page(partner_code):
 
 @app.route('/promo/<partner_code>/data')
 def promo_data(partner_code):
-    logger.info(f"Запрос данных для партнера {partner_code}")
+    brand_filter = request.args.get('brand')
     promotions_list = promo_client.get_promotions_list_sync(partner_code)
     if not promotions_list:
-        logger.warning(f"Нет акций для {partner_code}")
-        return jsonify({"promotions": []})  # возвращаем 200, но пустой массив
+        return jsonify({"promotions": []}), 404
     enriched = []
     for promo in promotions_list:
+        # Фильтрация по бренду, если задан
+        if brand_filter and promo.get('mark', '').lower() != brand_filter.lower():
+            continue
         promo_id = promo.get('id')
         if not promo_id:
             continue
@@ -203,7 +205,6 @@ def promo_data(partner_code):
             'mark': clean_text(promo.get('mark', '')),
             'date_to': clean_text(promo.get('date_to', ''))
         })
-    logger.info(f"Отправлено {len(enriched)} акций")
     return jsonify({"promotions": enriched})
 
 @app.route('/health')
