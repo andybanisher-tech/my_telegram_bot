@@ -62,10 +62,7 @@ HTML_TEMPLATE = """
             --button-bg: #0a84ff;
             --button-hover: #005fc1;
         }
-        body {
-            background-color: var(--bg-color);
-            color: var(--text-color);
-        }
+        body { background-color: var(--bg-color); color: var(--text-color); }
         .container { max-width: 550px; margin: 0 auto; }
         h1 { font-size: 28px; font-weight: 600; margin-bottom: 8px; text-align: center; color: var(--text-color); }
         .sub { text-align: center; color: var(--meta-color); margin-bottom: 28px; font-size: 15px; }
@@ -141,29 +138,22 @@ HTML_TEMPLATE = """
         const allMode = urlParams.get('all') === '1';
         let partnerName = urlParams.get('name');
         if (partnerName) {
-            try {
-                partnerName = decodeURIComponent(partnerName);
-            } catch(e) {}
+            try { partnerName = decodeURIComponent(partnerName); } catch(e) {}
             document.getElementById('main-title').innerText = `🎁 Акции для ${escapeHtml(partnerName)}`;
             document.getElementById('sub-title').innerText = `Персональные предложения (ID: ${escapeHtml(window.location.pathname.split('/').pop())})`;
         } else if (allMode) {
             document.getElementById('main-title').innerText = `🎁 Все акции сайта`;
             document.getElementById('sub-title').innerText = `Актуальные предложения`;
         }
-        
-        const dataUrl = window.location.pathname + '/data' + (brandFilter ? `?brand=${brandFilter}` : '') + (allMode ? (brandFilter ? '&' : '?') + 'all=1' : '');
-        
+
+        let dataUrl = window.location.pathname + '/data' + (brandFilter ? `?brand=${brandFilter}` : '');
+        if (allMode) dataUrl += (brandFilter ? '&' : '?') + 'all=1';
         fetch(dataUrl)
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('HTTP status ' + response.status);
-                }
-                return response.json();
-            })
+            .then(response => response.json())
             .then(data => {
                 const container = document.getElementById('content');
                 if (data.promotions && data.promotions.length) {
-                    let html = '<h1>' + (partnerName ? `🎁 Акции для ${escapeHtml(partnerName)}` : (allMode ? '🎁 Все акции сайта' : '🎁 Акции для вас')) + '</h1><div class="sub">' + (partnerName ? 'Персональные предложения' : (allMode ? 'Актуальные предложения' : 'Персональные предложения')) + '</div>';
+                    let html = `<h1>${escapeHtml(document.getElementById('main-title').innerText)}</h1><div class="sub">${escapeHtml(document.getElementById('sub-title').innerText)}</div>`;
                     data.promotions.forEach(promo => {
                         html += `
                         <div class="promo-card">
@@ -180,12 +170,12 @@ HTML_TEMPLATE = """
                     });
                     container.innerHTML = html;
                 } else {
-                    container.innerHTML = '<h1>' + (partnerName ? `🎁 Акции для ${escapeHtml(partnerName)}` : (allMode ? '🎁 Все акции сайта' : '🎁 Акции для вас')) + '</h1><div class="sub">' + (partnerName ? 'Персональные предложения' : (allMode ? 'Актуальные предложения' : 'Персональные предложения')) + '</div><div style="background: var(--card-bg); border-radius: 20px; padding: 40px 20px; text-align: center;">😔 На данный момент нет активных акций</div><div class="footer">Stalker-Co — всё для профессионалов</div>';
+                    container.innerHTML = `<h1>${escapeHtml(document.getElementById('main-title').innerText)}</h1><div class="sub">${escapeHtml(document.getElementById('sub-title').innerText)}</div><div style="background: var(--card-bg); border-radius: 20px; padding: 40px 20px; text-align: center;">😔 На данный момент нет активных акций</div><div class="footer">Stalker-Co — всё для профессионалов</div>`;
                 }
             })
             .catch(error => {
                 console.error('Ошибка загрузки акций:', error);
-                document.getElementById('content').innerHTML = '<h1>' + (partnerName ? `🎁 Акции для ${escapeHtml(partnerName)}` : (allMode ? '🎁 Все акции сайта' : '🎁 Акции для вас')) + '</h1><div class="sub">' + (partnerName ? 'Персональные предложения' : (allMode ? 'Актуальные предложения' : 'Персональные предложения')) + '</div><div style="background: var(--card-bg); border-radius: 20px; padding: 40px 20px; text-align: center;">❌ Ошибка загрузки акций. Попробуйте позже.</div><div class="footer">Stalker-Co — всё для профессионалов</div>';
+                document.getElementById('content').innerHTML = `<h1>${escapeHtml(document.getElementById('main-title').innerText)}</h1><div class="sub">${escapeHtml(document.getElementById('sub-title').innerText)}</div><div style="background: var(--card-bg); border-radius: 20px; padding: 40px 20px; text-align: center;">❌ Ошибка загрузки акций. Попробуйте позже.</div><div class="footer">Stalker-Co — всё для профессионалов</div>`;
             });
     </script>
 </body>
@@ -201,7 +191,7 @@ def promo_data(partner_code):
     all_mode = request.args.get('all') == '1'
     brand_filter = request.args.get('brand')
     if all_mode:
-        # Все акции сайта (старый эндпоинт)
+        # Все акции сайта (один запрос, ответ содержит banners)
         banners = bitrix_client.get_banners_sync(partner_code)
         if not banners:
             return jsonify({"promotions": []}), 404
@@ -212,14 +202,14 @@ def promo_data(partner_code):
                 'description': clean_text(banner.get('description', '')),
                 'image': clean_text(banner.get('image')),
                 'link': clean_text(banner.get('link')),
-                'mark': '',  # в общих акциях нет марки
+                'mark': '',
                 'date_to': clean_text(banner.get('date_to', ''))
             })
         if brand_filter:
             enriched = [p for p in enriched if brand_filter.lower() in p['name'].lower()]
         return jsonify({"promotions": enriched})
     else:
-        # Персональные акции (новый эндпоинт)
+        # Персональные акции (два запроса)
         promotions_list = promo_client.get_promotions_list_sync(partner_code)
         if not promotions_list:
             return jsonify({"promotions": []}), 404

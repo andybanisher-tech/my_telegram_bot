@@ -19,7 +19,6 @@ async def fetch_and_show_banners(message: types.Message, user_id: int, company_c
     promotions = await asyncio.to_thread(promo_client.get_promotions_list_sync, company_code)
     if not promotions:
         await wait_msg.delete()
-        # Предлагаем все акции сайта
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="🌐 Все акции сайта", web_app=WebAppInfo(url=f"{BASE_WEB_URL}/promo/{company_code}?all=1"))]
         ])
@@ -34,10 +33,7 @@ async def fetch_and_show_banners(message: types.Message, user_id: int, company_c
     web_app_url = f"{BASE_WEB_URL}/promo/{company_code}"
     if brand_filter:
         web_app_url += f"?brand={brand_filter}"
-    web_app_button = InlineKeyboardButton(
-        text="🎁 Открыть акции",
-        web_app=WebAppInfo(url=web_app_url)
-    )
+    web_app_button = InlineKeyboardButton(text="🎁 Открыть акции", web_app=WebAppInfo(url=web_app_url))
     keyboard = InlineKeyboardMarkup(inline_keyboard=[[web_app_button]])
     await wait_msg.delete()
     await message.answer(

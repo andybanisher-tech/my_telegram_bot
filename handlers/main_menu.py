@@ -7,7 +7,6 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 import database as db
 import promo_client
-import bitrix_client
 from utils.helpers import is_manager
 from keyboards.common import (
     get_main_keyboard, get_phone_keyboard, get_back_to_main_keyboard,
@@ -29,7 +28,7 @@ BASE_WEB_URL = os.getenv("BASE_WEB_URL", "https://news-bot-stalker.ru")
 async def show_main_menu(chat_id: int, user_id: int, bot):
     await bot.send_message(chat_id, "Главное меню:", reply_markup=get_main_keyboard(user_id))
 
-# ---------- Функции для вызова из text_handler ----------
+# ---------- Пользовательские функции ----------
 async def show_balance(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
     company = await show_company_selection(user_id, message, "balance")
@@ -85,7 +84,6 @@ async def show_banners(message: types.Message, state: FSMContext, brand: str = N
         )
 
 async def show_banners_for_partner(message: types.Message, state: FSMContext, partner_id: str, partner_name: str):
-    """Показывает акции для указанного ID контрагента (для менеджеров)."""
     wait_msg = await message.answer(f"⏳ Проверяем акции для контрагента {partner_id}...")
     promotions = await asyncio.to_thread(promo_client.get_promotions_list_sync, partner_id)
     if not promotions:
@@ -103,10 +101,7 @@ async def show_banners_for_partner(message: types.Message, state: FSMContext, pa
         return
     encoded_name = urllib.parse.quote(partner_name)
     web_app_url = f"{BASE_WEB_URL}/promo/{partner_id}?name={encoded_name}"
-    web_app_button = InlineKeyboardButton(
-        text="🎁 Открыть акции",
-        web_app=WebAppInfo(url=web_app_url)
-    )
+    web_app_button = InlineKeyboardButton(text="🎁 Открыть акции", web_app=WebAppInfo(url=web_app_url))
     keyboard = InlineKeyboardMarkup(inline_keyboard=[[web_app_button]])
     await wait_msg.delete()
     await message.answer(
@@ -153,7 +148,7 @@ async def show_help(message: types.Message, state: FSMContext):
     help_text += "\nЕсли у вас есть вопросы, обратитесь к администратору."
     await message.answer(help_text, parse_mode="Markdown")
 
-# ---------- Оригинальный обработчик кнопок главного меню ----------
+# ---------- Обработчики кнопок ----------
 @router.message(F.text.in_([
     "📰 Подписаться на новости", "📋 Мои подписки", "🏢 Мои компании",
     "🎁 Текущие акции", "🎁 Реферальная программа", "👥 Акции контрагента",

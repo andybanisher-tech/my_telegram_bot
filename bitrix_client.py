@@ -6,7 +6,7 @@ from typing import List, Dict, Any, Optional
 
 logger = logging.getLogger(__name__)
 
-BITRIX_API_URL = "https://stalker-co.ru:443/bitrix/tools/mlk_tgbotapi_banner.php"
+BITRIX_API_URL = "https://talker-co.ru:443/bitrix/tools/mlk_tgbotapi_banner.php"
 BITRIX_API_KEY = os.getenv("BITRIX_API_KEY")
 
 def parse_banner(banner: Dict[str, Any]) -> Dict[str, Any]:
@@ -49,6 +49,7 @@ def get_banners_sync(company_code: str) -> Optional[List[Dict[str, Any]]]:
     }
     try:
         response = requests.get(BITRIX_API_URL, params=params, timeout=30)
+        logger.info(f"Bitrix API (sync) ответ: статус {response.status_code}")
         if response.status_code != 200:
             logger.error(f"Ошибка Bitrix API: статус {response.status_code}")
             return None
@@ -57,5 +58,5 @@ def get_banners_sync(company_code: str) -> Optional[List[Dict[str, Any]]]:
         parsed = [parse_banner(b) for b in banners if b.get("image")]
         return parsed
     except Exception as e:
-        logger.error(f"Исключение при запросе к Bitrix API: {e}")
+        logger.error(f"Исключение при запросе к Bitrix API (sync): {e}")
         return None

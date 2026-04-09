@@ -56,10 +56,6 @@ async def handle_text(message: types.Message, state: FSMContext):
                 await main_menu.show_banners_for_partner(message, state, partner_id, partner_name)
                 return
         brand = extract_brand(text, llm) if llm else None
-        if brand:
-            logger.info(f"Извлечён бренд: {brand} для текста: {text}")
-        else:
-            logger.info(f"Бренд не найден для текста: {text}")
         await main_menu.show_banners(message, state, brand)
     elif intent == "bonus":
         await main_menu.show_bonus(message, state)
