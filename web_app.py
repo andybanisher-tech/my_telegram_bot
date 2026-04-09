@@ -30,8 +30,8 @@ HTML_TEMPLATE = """
     <meta property="og:description" content="Акции и специальные предложения, подготовленные специально для вас." />
     <meta property="og:type" content="website" />
     <meta property="og:image" content="https://stalker-co.ru/local/templates/stalker/images/logo.png" />
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        /* Базовые переменные для светлой темы */
         :root {
             --bg-color: #ffffff;
             --text-color: #1c1c1e;
@@ -43,19 +43,16 @@ HTML_TEMPLATE = """
             --button-bg: #007aff;
             --button-hover: #005fc1;
         }
-        /* Тёмная тема через медиазапрос */
-        @media (prefers-color-scheme: dark) {
-            :root {
-                --bg-color: #000000;
-                --text-color: #ffffff;
-                --card-bg: #1c1c1e;
-                --border-color: #2c2c2e;
-                --meta-color: #8e8e93;
-                --brand-bg: #2c2c2e;
-                --brand-text: #e5e5ea;
-                --button-bg: #0a84ff;
-                --button-hover: #005fc1;
-            }
+        body.dark {
+            --bg-color: #000000;
+            --text-color: #ffffff;
+            --card-bg: #1c1c1e;
+            --border-color: #2c2c2e;
+            --meta-color: #8e8e93;
+            --brand-bg: #2c2c2e;
+            --brand-text: #e5e5ea;
+            --button-bg: #0a84ff;
+            --button-hover: #005fc1;
         }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -102,6 +99,28 @@ HTML_TEMPLATE = """
         @media (max-width: 480px) { body { padding: 12px; } .promo-card { padding: 16px; } .promo-title { font-size: 18px; } }
     </style>
     <script>
+        const tg = window.Telegram.WebApp;
+        tg.ready();
+        if (tg.colorScheme === 'dark') {
+            document.body.classList.add('dark');
+        }
+        tg.onEvent('themeChanged', () => {
+            if (tg.colorScheme === 'dark') {
+                document.body.classList.add('dark');
+            } else {
+                document.body.classList.remove('dark');
+            }
+        });
+    </script>
+</head>
+<body>
+    <div class="container" id="content">
+        <h1>🎁 Акции для вас</h1>
+        <div class="sub">Персональные предложения</div>
+        <div class="loader">⏳ Загружаем акции...</div>
+    </div>
+    <div class="footer">Stalker-Co — всё для профессионалов</div>
+    <script>
         function escapeHtml(str) {
             if (!str) return '';
             return str.replace(/[&<>]/g, function(m) {
@@ -111,7 +130,9 @@ HTML_TEMPLATE = """
                 return m;
             });
         }
-        fetch(window.location.href + '/data')
+        const urlParams = new URLSearchParams(window.location.search);
+        const brandFilter = urlParams.get('brand');
+        fetch(window.location.pathname + '/data' + (brandFilter ? `?brand=${brandFilter}` : ''))
             .then(response => response.json())
             .then(data => {
                 const container = document.getElementById('content');
@@ -141,14 +162,6 @@ HTML_TEMPLATE = """
                 document.getElementById('content').innerHTML = '<h1>🎁 Акции для вас</h1><div class="sub">Персональные предложения</div><div style="background: var(--card-bg); border-radius: 20px; padding: 40px 20px; text-align: center;">❌ Ошибка загрузки акций. Попробуйте позже.</div><div class="footer">Stalker-Co — всё для профессионалов</div>';
             });
     </script>
-</head>
-<body>
-    <div class="container" id="content">
-        <h1>🎁 Акции для вас</h1>
-        <div class="sub">Персональные предложения</div>
-        <div class="loader">⏳ Загружаем акции...</div>
-    </div>
-    <div class="footer">Stalker-Co — всё для профессионалов</div>
 </body>
 </html>
 """
@@ -168,10 +181,13 @@ def promo_data(partner_code):
         promo_id = promo.get('id')
         if not promo_id:
             continue
-        if brand_filter and promo.get('mark', '').lower() != brand_filter.lower():
-            continue
         clean_id = str(int(promo_id)) if promo_id.isdigit() else promo_id
         details = promo_client.get_promotion_details_sync(clean_id)
+        # Фильтруем по бренду, если задан
+        if brand_filter:
+            promo_mark = promo.get('mark', '')
+            if promo_mark.lower() != brand_filter.lower():
+                continue
         enriched.append({
             'name': clean_text(details.get('name')) if details else clean_text(promo.get('name', 'Акция')),
             'description': clean_text(details.get('description')) if details else '',
