@@ -7,7 +7,12 @@ from typing import List, Dict, Any, Optional
 logger = logging.getLogger(__name__)
 
 BITRIX_API_URL = "https://stalker-co.ru:443/bitrix/tools/mlk_tgbotapi_banner.php"
-BITRIX_API_KEY = os.getenv("BITRIX_API_KEY")
+
+def get_config():
+    """Возвращает конфигурацию Bitrix из переменных окружения."""
+    return {
+        "api_key": os.getenv("BITRIX_API_KEY"),
+    }
 
 def parse_banner(banner: Dict[str, Any]) -> Dict[str, Any]:
     return {
@@ -19,11 +24,12 @@ def parse_banner(banner: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 async def get_banners(company_code: str) -> Optional[List[Dict[str, Any]]]:
-    if not BITRIX_API_KEY:
+    config = get_config()
+    if not config["api_key"]:
         logger.error("BITRIX_API_KEY не задан в .env")
         return None
     params = {
-        "key": BITRIX_API_KEY,
+        "key": config["api_key"],
         "code": company_code
     }
     try:
@@ -40,11 +46,12 @@ async def get_banners(company_code: str) -> Optional[List[Dict[str, Any]]]:
         return None
 
 def get_banners_sync(company_code: str) -> Optional[List[Dict[str, Any]]]:
-    if not BITRIX_API_KEY:
+    config = get_config()
+    if not config["api_key"]:
         logger.error("BITRIX_API_KEY не задан в .env")
         return None
     params = {
-        "key": BITRIX_API_KEY,
+        "key": config["api_key"],
         "code": company_code
     }
     try:
