@@ -134,17 +134,21 @@ HTML_TEMPLATE = """
         }
 
         const urlParams = new URLSearchParams(window.location.search);
-        const brandFilter = urlParams.get('brand');
-        const allMode = urlParams.get('all') === '1';
-        let partnerName = urlParams.get('name');
-        if (partnerName) {
-            try { partnerName = decodeURIComponent(partnerName); } catch(e) {}
-            document.getElementById('main-title').innerText = `🎁 Акции для ${escapeHtml(partnerName)}`;
-            document.getElementById('sub-title').innerText = `Персональные предложения (ID: ${escapeHtml(window.location.pathname.split('/').pop())})`;
-        } else if (allMode) {
-            document.getElementById('main-title').innerText = `🎁 Все акции сайта`;
-            document.getElementById('sub-title').innerText = `Актуальные предложения`;
-        }
+const brandFilter = urlParams.get('brand');
+const allMode = urlParams.get('all') === '1';
+let partnerName = urlParams.get('name');
+let partnerId = window.location.pathname.split('/').pop(); // извлекаем ID из URL
+if (partnerId) {
+    try { partnerId = decodeURIComponent(partnerId); } catch(e) {}
+}
+if (partnerName) {
+    try { partnerName = decodeURIComponent(partnerName); } catch(e) {}
+    document.getElementById('main-title').innerText = `🎁 Акции для ${escapeHtml(partnerName)}`;
+    document.getElementById('sub-title').innerText = `Персональные предложения (ID: ${escapeHtml(partnerId)})`;
+} else if (allMode) {
+    document.getElementById('main-title').innerText = `🎁 Все акции сайта`;
+    document.getElementById('sub-title').innerText = `Актуальные предложения`;
+}
 
         let dataUrl = window.location.pathname + '/data' + (brandFilter ? `?brand=${brandFilter}` : '');
         if (allMode) dataUrl += (brandFilter ? '&' : '?') + 'all=1';
