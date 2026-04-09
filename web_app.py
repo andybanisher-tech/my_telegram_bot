@@ -31,7 +31,7 @@ HTML_TEMPLATE = """
     <meta property="og:type" content="website" />
     <meta property="og:image" content="https://stalker-co.ru/local/templates/stalker/images/logo.png" />
     <style>
-        /* CSS переменные для светлой темы */
+        /* Базовые переменные для светлой темы */
         :root {
             --bg-color: #ffffff;
             --text-color: #1c1c1e;
@@ -43,7 +43,7 @@ HTML_TEMPLATE = """
             --button-bg: #007aff;
             --button-hover: #005fc1;
         }
-        /* Тёмная тема через медиазапрос (автоматически) */
+        /* Тёмная тема через медиазапрос */
         @media (prefers-color-scheme: dark) {
             :root {
                 --bg-color: #000000;
@@ -63,6 +63,7 @@ HTML_TEMPLATE = """
             background-color: var(--bg-color);
             color: var(--text-color);
             padding: 20px 12px 40px;
+            transition: background-color 0.2s, color 0.2s;
         }
         .container { max-width: 550px; margin: 0 auto; }
         h1 { font-size: 28px; font-weight: 600; margin-bottom: 8px; text-align: center; color: var(--text-color); }
@@ -100,14 +101,6 @@ HTML_TEMPLATE = """
         .footer { text-align: center; font-size: 12px; color: var(--meta-color); margin-top: 30px; }
         @media (max-width: 480px) { body { padding: 12px; } .promo-card { padding: 16px; } .promo-title { font-size: 18px; } }
     </style>
-</head>
-<body>
-    <div class="container" id="content">
-        <h1>🎁 Акции для вас</h1>
-        <div class="sub">Персональные предложения</div>
-        <div class="loader">⏳ Загружаем акции...</div>
-    </div>
-    <div class="footer">Stalker-Co — всё для профессионалов</div>
     <script>
         function escapeHtml(str) {
             if (!str) return '';
@@ -148,6 +141,14 @@ HTML_TEMPLATE = """
                 document.getElementById('content').innerHTML = '<h1>🎁 Акции для вас</h1><div class="sub">Персональные предложения</div><div style="background: var(--card-bg); border-radius: 20px; padding: 40px 20px; text-align: center;">❌ Ошибка загрузки акций. Попробуйте позже.</div><div class="footer">Stalker-Co — всё для профессионалов</div>';
             });
     </script>
+</head>
+<body>
+    <div class="container" id="content">
+        <h1>🎁 Акции для вас</h1>
+        <div class="sub">Персональные предложения</div>
+        <div class="loader">⏳ Загружаем акции...</div>
+    </div>
+    <div class="footer">Stalker-Co — всё для профессионалов</div>
 </body>
 </html>
 """
@@ -167,7 +168,6 @@ def promo_data(partner_code):
         promo_id = promo.get('id')
         if not promo_id:
             continue
-        # Фильтрация по бренду
         if brand_filter and promo.get('mark', '').lower() != brand_filter.lower():
             continue
         clean_id = str(int(promo_id)) if promo_id.isdigit() else promo_id
