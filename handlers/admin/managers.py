@@ -180,6 +180,3 @@ async def manager_cancel(callback: types.CallbackQuery, state: FSMContext):
     )
     await callback.answer()
 
-@router.message()
-async def catch_all(message: types.Message):
-    print(f"CATCH ALL in managers: {message.text}")   
