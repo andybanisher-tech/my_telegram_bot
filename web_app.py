@@ -5,6 +5,7 @@ from flask import Flask, render_template_string, jsonify, request
 from dotenv import load_dotenv
 from pathlib import Path
 import promo_client
+import bitrix_client
 
 env_path = Path(__file__).parent / '.env'
 load_dotenv(dotenv_path=env_path)
@@ -136,7 +137,21 @@ HTML_TEMPLATE = """
 
         const urlParams = new URLSearchParams(window.location.search);
         const brandFilter = urlParams.get('brand');
-        const dataUrl = window.location.pathname + '/data' + (brandFilter ? `?brand=${brandFilter}` : '');
+        const partnerName = urlParams.get('partner_name');
+        const allSite = urlParams.get('all_site');
+        
+        let dataUrl = window.location.pathname + '/data';
+        const queryParams = new URLSearchParams();
+        if (brandFilter) queryParams.append('brand', brandFilter);
+        if (allSite === '1') queryParams.append('all_site', '1');
+        if (queryParams.toString()) dataUrl += '?' + queryParams.toString();
+        
+        // Обновляем заголовок, если передан partner_name
+        if (partnerName) {
+            document.querySelector('h1').innerText = `🎁 Акции для ${partnerName}`;
+            document.querySelector('.sub').innerText = `Контрагент: ${partnerName}`;
+        }
+        
         fetch(dataUrl)
             .then(response => {
                 if (!response.ok) {
@@ -147,7 +162,8 @@ HTML_TEMPLATE = """
             .then(data => {
                 const container = document.getElementById('content');
                 if (data.promotions && data.promotions.length) {
-                    let html = '<h1>🎁 Акции для вас</h1><div class="sub">Персональные предложения</div>';
+                    let html = '<h1>' + (partnerName ? `🎁 Акции для ${partnerName}` : '🎁 Акции для вас') + '</h1>';
+                    html += '<div class="sub">' + (partnerName ? `Контрагент: ${partnerName}` : 'Персональные предложения') + '</div>';
                     data.promotions.forEach(promo => {
                         html += `
                         <div class="promo-card">
@@ -164,12 +180,12 @@ HTML_TEMPLATE = """
                     });
                     container.innerHTML = html;
                 } else {
-                    container.innerHTML = '<h1>🎁 Акции для вас</h1><div class="sub">Персональные предложения</div><div style="background: var(--card-bg); border-radius: 20px; padding: 40px 20px; text-align: center;">😔 На данный момент для вас нет активных акций</div><div class="footer">Stalker-Co — всё для профессионалов</div>';
+                    container.innerHTML = '<h1>' + (partnerName ? `🎁 Акции для ${partnerName}` : '🎁 Акции для вас') + '</h1><div class="sub">' + (partnerName ? `Контрагент: ${partnerName}` : 'Персональные предложения') + '</div><div style="background: var(--card-bg); border-radius: 20px; padding: 40px 20px; text-align: center;">😔 На данный момент нет активных акций</div><div class="footer">Stalker-Co — всё для профессионалов</div>';
                 }
             })
             .catch(error => {
                 console.error('Ошибка загрузки акций:', error);
-                document.getElementById('content').innerHTML = '<h1>🎁 Акции для вас</h1><div class="sub">Персональные предложения</div><div style="background: var(--card-bg); border-radius: 20px; padding: 40px 20px; text-align: center;">❌ Ошибка загрузки акций. Попробуйте позже.</div><div class="footer">Stalker-Co — всё для профессионалов</div>';
+                document.getElementById('content').innerHTML = '<h1>' + (partnerName ? `🎁 Акции для ${partnerName}` : '🎁 Акции для вас') + '</h1><div class="sub">' + (partnerName ? `Контрагент: ${partnerName}` : 'Персональные предложения') + '</div><div style="background: var(--card-bg); border-radius: 20px; padding: 40px 20px; text-align: center;">❌ Ошибка загрузки акций. Попробуйте позже.</div><div class="footer">Stalker-Co — всё для профессионалов</div>';
             });
     </script>
 </body>
@@ -183,6 +199,26 @@ def promo_page(partner_code):
 @app.route('/promo/<partner_code>/data')
 def promo_data(partner_code):
     brand_filter = request.args.get('brand')
+    all_site = request.args.get('all_site') == '1'
+    
+    if all_site:
+        # Запрашиваем все акции сайта через bitrix_client
+        banners = bitrix_client.get_banners_sync(partner_code)  # нужно добавить синхронную обёртку
+        if not banners:
+            return jsonify({"promotions": []}), 404
+        enriched = []
+        for banner in banners:
+            enriched.append({
+                'name': clean_text(banner.get('name', 'Акция')),
+                'description': clean_text(banner.get('description', '')),
+                'image': clean_text(banner.get('image')),
+                'link': clean_text(banner.get('link')),
+                'mark': '',  # у общих баннеров нет марки
+                'date_to': clean_text(banner.get('date_to', ''))
+            })
+        return jsonify({"promotions": enriched})
+    
+    # Иначе персональные акции
     promotions_list = promo_client.get_promotions_list_sync(partner_code)
     if not promotions_list:
         return jsonify({"promotions": []}), 404

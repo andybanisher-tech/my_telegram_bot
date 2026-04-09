@@ -82,23 +82,27 @@ async def show_banners(message: types.Message, state: FSMContext, brand: str = N
             reply_markup=get_company_selection_keyboard(companies)
         )
 
-async def show_banners_for_partner(message: types.Message, state: FSMContext, partner_id: str):
+async def show_banners_for_partner(message: types.Message, state: FSMContext, partner_id: str, partner_name: str = None):
     """Показывает акции для указанного ID контрагента (для менеджеров)."""
     wait_msg = await message.answer("⏳ Проверяем акции для контрагента...")
     promotions = await asyncio.to_thread(promo_client.get_promotions_list_sync, partner_id)
     if not promotions:
+        # Если нет персональных, показываем все акции сайта
         await wait_msg.delete()
-        await message.answer("❌ Для указанного контрагента нет активных акций.")
+        await banners.show_all_site_promos(message, message.from_user.id, partner_id, None, partner_name)
         return
     web_app_url = f"{BASE_WEB_URL}/promo/{partner_id}"
+    if partner_name:
+        web_app_url += f"?partner_name={partner_name}"
     web_app_button = InlineKeyboardButton(
         text="🎁 Открыть акции",
         web_app=WebAppInfo(url=web_app_url)
     )
     keyboard = InlineKeyboardMarkup(inline_keyboard=[[web_app_button]])
     await wait_msg.delete()
+    title = f"Акции для {partner_name} (ID: {partner_id})" if partner_name else f"Акции для контрагента {partner_id}"
     await message.answer(
-        f"🎁 *Акции для контрагента {partner_id}*\n\n"
+        f"🎁 *{title}*\n\n"
         "Нажмите на кнопку ниже, чтобы открыть страницу с предложениями.",
         parse_mode="Markdown",
         reply_markup=keyboard

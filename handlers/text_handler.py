@@ -19,6 +19,12 @@ def extract_partner_id(text: str):
         return match.group(1) + match.group(2)
     return None
 
+def extract_partner_name_from_response(partner_info):
+    """Извлекает имя контрагента из ответа SOAP (структура partner_info['name'])."""
+    if partner_info and 'name' in partner_info:
+        return partner_info['name']
+    return None
+
 class NoActiveStateFilter(BaseFilter):
     async def __call__(self, message: types.Message, state: FSMContext) -> bool:
         current_state = await state.get_state()
@@ -50,7 +56,10 @@ async def handle_text(message: types.Message, state: FSMContext):
         if is_manager(user_id):
             partner_id = extract_partner_id(text)
             if partner_id:
-                await main_menu.show_banners_for_partner(message, state, partner_id)
+                # Запрашиваем информацию о партнёре, чтобы получить имя
+                partner_info = await soap_client.get_partner_by_id(partner_id)
+                partner_name = extract_partner_name_from_response(partner_info)
+                await main_menu.show_banners_for_partner(message, state, partner_id, partner_name)
                 return
         brand = extract_brand(text, llm) if llm else None
         if brand:
