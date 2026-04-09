@@ -99,18 +99,28 @@ HTML_TEMPLATE = """
         @media (max-width: 480px) { body { padding: 12px; } .promo-card { padding: 16px; } .promo-title { font-size: 18px; } }
     </style>
     <script>
-        const tg = window.Telegram.WebApp;
-        tg.ready();
-        if (tg.colorScheme === 'dark') {
-            document.body.classList.add('dark');
-        }
-        tg.onEvent('themeChanged', () => {
-            if (tg.colorScheme === 'dark') {
+        function setTheme(isDark) {
+            if (isDark) {
                 document.body.classList.add('dark');
             } else {
                 document.body.classList.remove('dark');
             }
-        });
+        }
+        if (window.Telegram && window.Telegram.WebApp) {
+            const tg = window.Telegram.WebApp;
+            tg.ready();
+            setTheme(tg.colorScheme === 'dark');
+            tg.onEvent('themeChanged', function() {
+                setTheme(tg.colorScheme === 'dark');
+            });
+        } else {
+            // Fallback на системную тему
+            const darkModeMedia = window.matchMedia('(prefers-color-scheme: dark)');
+            setTheme(darkModeMedia.matches);
+            darkModeMedia.addEventListener('change', function(e) {
+                setTheme(e.matches);
+            });
+        }
     </script>
 </head>
 <body>
@@ -130,9 +140,7 @@ HTML_TEMPLATE = """
                 return m;
             });
         }
-        const urlParams = new URLSearchParams(window.location.search);
-        const brandFilter = urlParams.get('brand');
-        fetch(window.location.pathname + '/data' + (brandFilter ? `?brand=${brandFilter}` : ''))
+        fetch(window.location.href + '/data')
             .then(response => response.json())
             .then(data => {
                 const container = document.getElementById('content');
@@ -181,13 +189,11 @@ def promo_data(partner_code):
         promo_id = promo.get('id')
         if not promo_id:
             continue
+        # Фильтр по бренду (если указан)
+        if brand_filter and promo.get('mark', '').lower() != brand_filter.lower():
+            continue
         clean_id = str(int(promo_id)) if promo_id.isdigit() else promo_id
         details = promo_client.get_promotion_details_sync(clean_id)
-        # Фильтруем по бренду, если задан
-        if brand_filter:
-            promo_mark = promo.get('mark', '')
-            if promo_mark.lower() != brand_filter.lower():
-                continue
         enriched.append({
             'name': clean_text(details.get('name')) if details else clean_text(promo.get('name', 'Акция')),
             'description': clean_text(details.get('description')) if details else '',
