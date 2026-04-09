@@ -32,13 +32,7 @@ HTML_TEMPLATE = """
     <meta property="og:image" content="https://stalker-co.ru/local/templates/stalker/images/logo.png" />
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            padding: 20px 12px 40px;
-            transition: background-color 0.2s, color 0.2s;
-        }
-        body.light {
+        :root {
             --bg-color: #ffffff;
             --text-color: #1c1c1e;
             --card-bg: #ffffff;
@@ -60,9 +54,13 @@ HTML_TEMPLATE = """
             --button-bg: #0a84ff;
             --button-hover: #005fc1;
         }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
             background-color: var(--bg-color);
             color: var(--text-color);
+            padding: 20px 12px 40px;
+            transition: background-color 0.2s, color 0.2s;
         }
         .container { max-width: 550px; margin: 0 auto; }
         h1 { font-size: 28px; font-weight: 600; margin-bottom: 8px; text-align: center; color: var(--text-color); }
@@ -100,6 +98,20 @@ HTML_TEMPLATE = """
         .footer { text-align: center; font-size: 12px; color: var(--meta-color); margin-top: 30px; }
         @media (max-width: 480px) { body { padding: 12px; } .promo-card { padding: 16px; } .promo-title { font-size: 18px; } }
     </style>
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.ready();
+        if (tg.colorScheme === 'dark') {
+            document.body.classList.add('dark');
+        }
+        tg.onEvent('themeChanged', () => {
+            if (tg.colorScheme === 'dark') {
+                document.body.classList.add('dark');
+            } else {
+                document.body.classList.remove('dark');
+            }
+        });
+    </script>
 </head>
 <body>
     <div class="container" id="content">
@@ -109,21 +121,6 @@ HTML_TEMPLATE = """
     </div>
     <div class="footer">Stalker-Co — всё для профессионалов</div>
     <script>
-        const tg = window.Telegram.WebApp;
-        tg.ready();
-        // Устанавливаем тему
-        function setTheme() {
-            if (tg.colorScheme === 'dark') {
-                document.body.classList.add('dark');
-                document.body.classList.remove('light');
-            } else {
-                document.body.classList.add('light');
-                document.body.classList.remove('dark');
-            }
-        }
-        setTheme();
-        tg.onEvent('themeChanged', setTheme);
-        
         function escapeHtml(str) {
             if (!str) return '';
             return str.replace(/[&<>]/g, function(m) {
@@ -133,18 +130,10 @@ HTML_TEMPLATE = """
                 return m;
             });
         }
-        
-        // Формируем URL для запроса данных
-        var dataUrl = window.location.origin + window.location.pathname + '/data';
-        console.log('Fetching data from:', dataUrl);
-        
-        fetch(dataUrl)
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('HTTP status ' + response.status);
-                }
-                return response.json();
-            })
+        const urlParams = new URLSearchParams(window.location.search);
+        const brandFilter = urlParams.get('brand');
+        fetch(window.location.pathname + '/data' + (brandFilter ? `?brand=${brandFilter}` : ''))
+            .then(response => response.json())
             .then(data => {
                 const container = document.getElementById('content');
                 if (data.promotions && data.promotions.length) {
@@ -189,14 +178,16 @@ def promo_data(partner_code):
         return jsonify({"promotions": []}), 404
     enriched = []
     for promo in promotions_list:
-        # Фильтрация по бренду, если задан
-        if brand_filter and promo.get('mark', '').lower() != brand_filter.lower():
-            continue
         promo_id = promo.get('id')
         if not promo_id:
             continue
         clean_id = str(int(promo_id)) if promo_id.isdigit() else promo_id
         details = promo_client.get_promotion_details_sync(clean_id)
+        # Фильтруем по бренду, если задан
+        if brand_filter:
+            promo_mark = promo.get('mark', '')
+            if promo_mark.lower() != brand_filter.lower():
+                continue
         enriched.append({
             'name': clean_text(details.get('name')) if details else clean_text(promo.get('name', 'Акция')),
             'description': clean_text(details.get('description')) if details else '',
