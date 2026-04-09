@@ -30,8 +30,8 @@ HTML_TEMPLATE = """
     <meta property="og:description" content="Акции и специальные предложения, подготовленные специально для вас." />
     <meta property="og:type" content="website" />
     <meta property="og:image" content="https://stalker-co.ru/local/templates/stalker/images/logo.png" />
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
+        /* CSS переменные для светлой темы */
         :root {
             --bg-color: #ffffff;
             --text-color: #1c1c1e;
@@ -43,16 +43,19 @@ HTML_TEMPLATE = """
             --button-bg: #007aff;
             --button-hover: #005fc1;
         }
-        body.dark {
-            --bg-color: #000000;
-            --text-color: #ffffff;
-            --card-bg: #1c1c1e;
-            --border-color: #2c2c2e;
-            --meta-color: #8e8e93;
-            --brand-bg: #2c2c2e;
-            --brand-text: #e5e5ea;
-            --button-bg: #0a84ff;
-            --button-hover: #005fc1;
+        /* Тёмная тема через медиазапрос (автоматически) */
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg-color: #000000;
+                --text-color: #ffffff;
+                --card-bg: #1c1c1e;
+                --border-color: #2c2c2e;
+                --meta-color: #8e8e93;
+                --brand-bg: #2c2c2e;
+                --brand-text: #e5e5ea;
+                --button-bg: #0a84ff;
+                --button-hover: #005fc1;
+            }
         }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -60,7 +63,6 @@ HTML_TEMPLATE = """
             background-color: var(--bg-color);
             color: var(--text-color);
             padding: 20px 12px 40px;
-            transition: background-color 0.2s, color 0.2s;
         }
         .container { max-width: 550px; margin: 0 auto; }
         h1 { font-size: 28px; font-weight: 600; margin-bottom: 8px; text-align: center; color: var(--text-color); }
@@ -98,30 +100,6 @@ HTML_TEMPLATE = """
         .footer { text-align: center; font-size: 12px; color: var(--meta-color); margin-top: 30px; }
         @media (max-width: 480px) { body { padding: 12px; } .promo-card { padding: 16px; } .promo-title { font-size: 18px; } }
     </style>
-    <script>
-        function setTheme(isDark) {
-            if (isDark) {
-                document.body.classList.add('dark');
-            } else {
-                document.body.classList.remove('dark');
-            }
-        }
-        if (window.Telegram && window.Telegram.WebApp) {
-            const tg = window.Telegram.WebApp;
-            tg.ready();
-            setTheme(tg.colorScheme === 'dark');
-            tg.onEvent('themeChanged', function() {
-                setTheme(tg.colorScheme === 'dark');
-            });
-        } else {
-            // Fallback на системную тему
-            const darkModeMedia = window.matchMedia('(prefers-color-scheme: dark)');
-            setTheme(darkModeMedia.matches);
-            darkModeMedia.addEventListener('change', function(e) {
-                setTheme(e.matches);
-            });
-        }
-    </script>
 </head>
 <body>
     <div class="container" id="content">
@@ -189,7 +167,7 @@ def promo_data(partner_code):
         promo_id = promo.get('id')
         if not promo_id:
             continue
-        # Фильтр по бренду (если указан)
+        # Фильтрация по бренду
         if brand_filter and promo.get('mark', '').lower() != brand_filter.lower():
             continue
         clean_id = str(int(promo_id)) if promo_id.isdigit() else promo_id
