@@ -44,15 +44,15 @@ HTML_TEMPLATE = """
             --button-hover: #005fc1;
         }
         body.dark {
-            --bg-color: #000000;
-            --text-color: #ffffff;
-            --card-bg: #1c1c1e;
-            --border-color: #2c2c2e;
-            --meta-color: #8e8e93;
-            --brand-bg: #2c2c2e;
-            --brand-text: #e5e5ea;
-            --button-bg: #0a84ff;
-            --button-hover: #005fc1;
+            --bg-color: #000000 !important;
+            --text-color: #ffffff !important;
+            --card-bg: #1c1c1e !important;
+            --border-color: #2c2c2e !important;
+            --meta-color: #8e8e93 !important;
+            --brand-bg: #2c2c2e !important;
+            --brand-text: #e5e5ea !important;
+            --button-bg: #0a84ff !important;
+            --button-hover: #005fc1 !important;
         }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
