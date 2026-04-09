@@ -43,6 +43,17 @@ HTML_TEMPLATE = """
             --button-bg: #007aff;
             --button-hover: #005fc1;
         }
+        body.light {
+             --bg-color: #ffffff;
+             --text-color: #1c1c1e;
+             --card-bg: #ffffff;
+             --border-color: #e5e5ea;
+             --meta-color: #6c6c70;
+             --brand-bg: #f2f2f7;
+             --brand-text: #3a3a3c;
+             --button-bg: #007aff;
+             --button-hover: #005fc1;
+}
         body.dark {
             --bg-color: #000000 !important;
             --text-color: #ffffff !important;
@@ -100,20 +111,18 @@ HTML_TEMPLATE = """
     </style>
            <script>
         const tg = window.Telegram.WebApp;
-        const setTheme = () => {
-            if (tg.colorScheme === 'dark') {
-                document.body.classList.add('dark');
-            } else {
-                document.body.classList.remove('dark');
-            }
-        };
-        tg.ready();
-        setTheme();
-        tg.onEvent('themeChanged', setTheme);
-        // Также добавим наблюдение за появлением атрибутов, если нужно
-        window.addEventListener('load', function() {
-            setTheme();
-        });
+tg.ready();
+function setTheme() {
+    if (tg.colorScheme === 'dark') {
+        document.body.classList.add('dark');
+        document.body.classList.remove('light');
+    } else {
+        document.body.classList.add('light');
+        document.body.classList.remove('dark');
+    }
+}
+setTheme();
+tg.onEvent('themeChanged', setTheme);
     </script>
 </head>
 <body>
