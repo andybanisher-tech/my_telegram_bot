@@ -6,7 +6,7 @@ from typing import List, Dict, Any, Optional
 
 logger = logging.getLogger(__name__)
 
-BITRIX_API_URL = "https://talker-co.ru:443/bitrix/tools/mlk_tgbotapi_banner.php"
+BITRIX_API_URL = "https://stalker-co.ru:443/bitrix/tools/mlk_tgbotapi_banner.php"
 BITRIX_API_KEY = os.getenv("BITRIX_API_KEY")
 
 def parse_banner(banner: Dict[str, Any]) -> Dict[str, Any]:
