@@ -98,19 +98,18 @@ HTML_TEMPLATE = """
         .footer { text-align: center; font-size: 12px; color: var(--meta-color); margin-top: 30px; }
         @media (max-width: 480px) { body { padding: 12px; } .promo-card { padding: 16px; } .promo-title { font-size: 18px; } }
     </style>
-    <script>
+        <script>
         const tg = window.Telegram.WebApp;
         tg.ready();
-        if (tg.colorScheme === 'dark') {
-            document.body.classList.add('dark');
-        }
-        tg.onEvent('themeChanged', () => {
+        const setTheme = () => {
             if (tg.colorScheme === 'dark') {
                 document.body.classList.add('dark');
             } else {
                 document.body.classList.remove('dark');
             }
-        });
+        };
+        setTheme();
+        tg.onEvent('themeChanged', setTheme);
     </script>
 </head>
 <body>
