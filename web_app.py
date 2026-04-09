@@ -1,6 +1,7 @@
 import os
 import logging
 import re
+import urllib.parse
 from flask import Flask, render_template_string, jsonify, request
 from dotenv import load_dotenv
 from pathlib import Path
@@ -138,9 +139,11 @@ HTML_TEMPLATE = """
         const urlParams = new URLSearchParams(window.location.search);
         const brandFilter = urlParams.get('brand');
         const allMode = urlParams.get('all') === '1';
-        const partnerName = urlParams.get('name');
-        
+        let partnerName = urlParams.get('name');
         if (partnerName) {
+            try {
+                partnerName = decodeURIComponent(partnerName);
+            } catch(e) {}
             document.getElementById('main-title').innerText = `🎁 Акции для ${escapeHtml(partnerName)}`;
             document.getElementById('sub-title').innerText = `Персональные предложения (ID: ${escapeHtml(window.location.pathname.split('/').pop())})`;
         } else if (allMode) {
@@ -198,7 +201,6 @@ def promo_data(partner_code):
     all_mode = request.args.get('all') == '1'
     brand_filter = request.args.get('brand')
     if all_mode:
-        # Все акции сайта
         banners = bitrix_client.get_banners_sync(partner_code)
         if not banners:
             return jsonify({"promotions": []}), 404
@@ -212,12 +214,10 @@ def promo_data(partner_code):
                 'mark': '',
                 'date_to': clean_text(banner.get('date_to', ''))
             })
-        # Фильтрация по бренду для общих акций (по названию)
         if brand_filter:
             enriched = [p for p in enriched if brand_filter.lower() in p['name'].lower()]
         return jsonify({"promotions": enriched})
     else:
-        # Персональные акции
         promotions_list = promo_client.get_promotions_list_sync(partner_code)
         if not promotions_list:
             return jsonify({"promotions": []}), 404
@@ -228,7 +228,6 @@ def promo_data(partner_code):
                 continue
             clean_id = str(int(promo_id)) if promo_id.isdigit() else promo_id
             details = promo_client.get_promotion_details_sync(clean_id)
-            # Фильтруем по бренду, если задан
             if brand_filter:
                 promo_mark = promo.get('mark', '')
                 if promo_mark.lower() != brand_filter.lower():

@@ -1,4 +1,5 @@
 from .states import (
-    NewsCreation, CategoryManagement, AdminManagement, ManagerManagement,
-    CompanyProcess, CategoryChoice, SubscriptionManagement, BannersProcess
+    NewsCreation, CategoryManagement, AdminManagement,
+    CompanyProcess, CategoryChoice, SubscriptionManagement, BannersProcess,
+    ManagerManagement
 )

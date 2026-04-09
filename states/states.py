@@ -32,7 +32,6 @@ class SubscriptionManagement(StatesGroup):
 class BannersProcess(StatesGroup):
     choosing_company = State()
 
-# Добавьте этот класс
 class ManagerManagement(StatesGroup):
     choosing_action = State()
     waiting_for_new_manager_id = State()

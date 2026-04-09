@@ -51,7 +51,6 @@ async def handle_text(message: types.Message, state: FSMContext):
         if is_manager(user_id):
             partner_id = extract_partner_id(text)
             if partner_id:
-                # Получаем имя контрагента для заголовка
                 partner_info = await soap_client.get_partner_by_id(partner_id)
                 partner_name = partner_info['name'] if partner_info else partner_id
                 await main_menu.show_banners_for_partner(message, state, partner_id, partner_name)

@@ -2,17 +2,14 @@ import logging
 from aiogram import Router, types
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
-from aiogram.fsm.state import State, StatesGroup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-from states import ManagerManagement
 import database as db
 from config import STATIC_MANAGERS
 from utils.helpers import is_admin
+from states import ManagerManagement
 
 router = Router()
 logger = logging.getLogger(__name__)
-
-
 
 def get_manager_management_keyboard():
     builder = InlineKeyboardBuilder()
@@ -22,7 +19,6 @@ def get_manager_management_keyboard():
     builder.button(text="◀️ Назад", callback_data="manager_back")
     builder.adjust(1)
     return builder.as_markup()
-
 
 def get_managers_list_keyboard():
     managers = db.get_db_managers()
@@ -179,4 +175,3 @@ async def manager_cancel(callback: types.CallbackQuery, state: FSMContext):
         reply_markup=get_manager_management_keyboard()
     )
     await callback.answer()
-

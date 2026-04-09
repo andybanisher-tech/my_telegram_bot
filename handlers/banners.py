@@ -8,7 +8,6 @@ from keyboards.common import get_back_to_main_keyboard
 from keyboards.companies import get_company_selection_keyboard
 from states import states
 import promo_client
-import bitrix_client
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -19,8 +18,8 @@ async def fetch_and_show_banners(message: types.Message, user_id: int, company_c
     wait_msg = await message.answer("⏳ Проверяем наличие акций...")
     promotions = await asyncio.to_thread(promo_client.get_promotions_list_sync, company_code)
     if not promotions:
-        # Предлагаем посмотреть все акции сайта
         await wait_msg.delete()
+        # Предлагаем все акции сайта
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="🌐 Все акции сайта", web_app=WebAppInfo(url=f"{BASE_WEB_URL}/promo/{company_code}?all=1"))]
         ])
@@ -32,7 +31,6 @@ async def fetch_and_show_banners(message: types.Message, user_id: int, company_c
         await message.answer("Выберите действие:", reply_markup=get_back_to_main_keyboard())
         return
 
-    # Формируем URL для Web App (персональные акции)
     web_app_url = f"{BASE_WEB_URL}/promo/{company_code}"
     if brand_filter:
         web_app_url += f"?brand={brand_filter}"

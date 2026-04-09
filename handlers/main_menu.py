@@ -1,6 +1,7 @@
 import os
 import asyncio
 import logging
+import urllib.parse
 from aiogram import Router, types, F
 from aiogram.fsm.context import FSMContext
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
@@ -89,9 +90,9 @@ async def show_banners_for_partner(message: types.Message, state: FSMContext, pa
     promotions = await asyncio.to_thread(promo_client.get_promotions_list_sync, partner_id)
     if not promotions:
         await wait_msg.delete()
-        # Предлагаем все акции сайта
+        encoded_name = urllib.parse.quote(partner_name)
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🌐 Все акции сайта", web_app=WebAppInfo(url=f"{BASE_WEB_URL}/promo/{partner_id}?all=1&name={partner_name}"))]
+            [InlineKeyboardButton(text="🌐 Все акции сайта", web_app=WebAppInfo(url=f"{BASE_WEB_URL}/promo/{partner_id}?all=1&name={encoded_name}"))]
         ])
         await message.answer(
             f"❌ Для контрагента {partner_name} (ID {partner_id}) нет персональных акций.\n"
@@ -100,7 +101,8 @@ async def show_banners_for_partner(message: types.Message, state: FSMContext, pa
         )
         await message.answer("Выберите действие:", reply_markup=get_back_to_main_keyboard())
         return
-    web_app_url = f"{BASE_WEB_URL}/promo/{partner_id}?name={partner_name}"
+    encoded_name = urllib.parse.quote(partner_name)
+    web_app_url = f"{BASE_WEB_URL}/promo/{partner_id}?name={encoded_name}"
     web_app_button = InlineKeyboardButton(
         text="🎁 Открыть акции",
         web_app=WebAppInfo(url=web_app_url)
