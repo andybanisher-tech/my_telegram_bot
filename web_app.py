@@ -102,11 +102,11 @@ HTML_TEMPLATE = """
 </head>
 <body>
     <div class="container" id="content">
-        <h1 id="main-title">🎁 Акции для вас</h1>
+        <h1 id="main-title">Акции для вас</h1>
         <div class="sub" id="sub-title">Персональные предложения</div>
         <div class="loader">⏳ Загружаем акции...</div>
     </div>
-    <div class="footer">Stalker-Co — всё для профессионалов</div>
+    <div class="footer">Stalker-Co</div>
     <script>
         const tg = window.Telegram.WebApp;
         tg.ready();
@@ -143,10 +143,10 @@ if (partnerId) {
 }
 if (partnerName) {
     try { partnerName = decodeURIComponent(partnerName); } catch(e) {}
-    document.getElementById('main-title').innerText = `🎁 Акции для ${escapeHtml(partnerName)}`;
+    document.getElementById('main-title').innerText = `Акции для ${escapeHtml(partnerName)}`;
     document.getElementById('sub-title').innerText = `Персональные предложения (ID: ${escapeHtml(partnerId)})`;
 } else if (allMode) {
-    document.getElementById('main-title').innerText = `🎁 Все акции сайта`;
+    document.getElementById('main-title').innerText = `Акции сайта`;
     document.getElementById('sub-title').innerText = `Актуальные предложения`;
 }
 
@@ -174,12 +174,12 @@ if (partnerName) {
                     });
                     container.innerHTML = html;
                 } else {
-                    container.innerHTML = `<h1>${escapeHtml(document.getElementById('main-title').innerText)}</h1><div class="sub">${escapeHtml(document.getElementById('sub-title').innerText)}</div><div style="background: var(--card-bg); border-radius: 20px; padding: 40px 20px; text-align: center;">😔 На данный момент нет активных акций</div><div class="footer">Stalker-Co — всё для профессионалов</div>`;
+                    container.innerHTML = `<h1>${escapeHtml(document.getElementById('main-title').innerText)}</h1><div class="sub">${escapeHtml(document.getElementById('sub-title').innerText)}</div><div style="background: var(--card-bg); border-radius: 20px; padding: 40px 20px; text-align: center;">😔 На данный момент нет активных акций</div><div class="footer">Stalker-Co</div>`;
                 }
             })
             .catch(error => {
                 console.error('Ошибка загрузки акций:', error);
-                document.getElementById('content').innerHTML = `<h1>${escapeHtml(document.getElementById('main-title').innerText)}</h1><div class="sub">${escapeHtml(document.getElementById('sub-title').innerText)}</div><div style="background: var(--card-bg); border-radius: 20px; padding: 40px 20px; text-align: center;">❌ Ошибка загрузки акций. Попробуйте позже.</div><div class="footer">Stalker-Co — всё для профессионалов</div>`;
+                document.getElementById('content').innerHTML = `<h1>${escapeHtml(document.getElementById('main-title').innerText)}</h1><div class="sub">${escapeHtml(document.getElementById('sub-title').innerText)}</div><div style="background: var(--card-bg); border-radius: 20px; padding: 40px 20px; text-align: center;">❌ Ошибка загрузки акций. Попробуйте позже.</div><div class="footer">Stalker-Co</div>`;
             });
     </script>
 </body>
