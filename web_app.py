@@ -32,7 +32,13 @@ HTML_TEMPLATE = """
     <meta property="og:image" content="https://stalker-co.ru/local/templates/stalker/images/logo.png" />
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        :root {
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            padding: 20px 12px 40px;
+            transition: background-color 0.2s, color 0.2s;
+        }
+        body.light {
             --bg-color: #ffffff;
             --text-color: #1c1c1e;
             --card-bg: #ffffff;
@@ -43,35 +49,20 @@ HTML_TEMPLATE = """
             --button-bg: #007aff;
             --button-hover: #005fc1;
         }
-        body.light {
-             --bg-color: #ffffff;
-             --text-color: #1c1c1e;
-             --card-bg: #ffffff;
-             --border-color: #e5e5ea;
-             --meta-color: #6c6c70;
-             --brand-bg: #f2f2f7;
-             --brand-text: #3a3a3c;
-             --button-bg: #007aff;
-             --button-hover: #005fc1;
-}
         body.dark {
-            --bg-color: #000000 !important;
-            --text-color: #ffffff !important;
-            --card-bg: #1c1c1e !important;
-            --border-color: #2c2c2e !important;
-            --meta-color: #8e8e93 !important;
-            --brand-bg: #2c2c2e !important;
-            --brand-text: #e5e5ea !important;
-            --button-bg: #0a84ff !important;
-            --button-hover: #005fc1 !important;
+            --bg-color: #000000;
+            --text-color: #ffffff;
+            --card-bg: #1c1c1e;
+            --border-color: #2c2c2e;
+            --meta-color: #8e8e93;
+            --brand-bg: #2c2c2e;
+            --brand-text: #e5e5ea;
+            --button-bg: #0a84ff;
+            --button-hover: #005fc1;
         }
-        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
             background-color: var(--bg-color);
             color: var(--text-color);
-            padding: 20px 12px 40px;
-            transition: background-color 0.2s, color 0.2s;
         }
         .container { max-width: 550px; margin: 0 auto; }
         h1 { font-size: 28px; font-weight: 600; margin-bottom: 8px; text-align: center; color: var(--text-color); }
@@ -109,21 +100,6 @@ HTML_TEMPLATE = """
         .footer { text-align: center; font-size: 12px; color: var(--meta-color); margin-top: 30px; }
         @media (max-width: 480px) { body { padding: 12px; } .promo-card { padding: 16px; } .promo-title { font-size: 18px; } }
     </style>
-           <script>
-        const tg = window.Telegram.WebApp;
-tg.ready();
-function setTheme() {
-    if (tg.colorScheme === 'dark') {
-        document.body.classList.add('dark');
-        document.body.classList.remove('light');
-    } else {
-        document.body.classList.add('light');
-        document.body.classList.remove('dark');
-    }
-}
-setTheme();
-tg.onEvent('themeChanged', setTheme);
-    </script>
 </head>
 <body>
     <div class="container" id="content">
@@ -133,6 +109,21 @@ tg.onEvent('themeChanged', setTheme);
     </div>
     <div class="footer">Stalker-Co — всё для профессионалов</div>
     <script>
+        const tg = window.Telegram.WebApp;
+        tg.ready();
+
+        function setTheme() {
+            if (tg.colorScheme === 'dark') {
+                document.body.classList.add('dark');
+                document.body.classList.remove('light');
+            } else {
+                document.body.classList.add('light');
+                document.body.classList.remove('dark');
+            }
+        }
+        setTheme();
+        tg.onEvent('themeChanged', setTheme);
+
         function escapeHtml(str) {
             if (!str) return '';
             return str.replace(/[&<>]/g, function(m) {
@@ -142,10 +133,17 @@ tg.onEvent('themeChanged', setTheme);
                 return m;
             });
         }
+
         const urlParams = new URLSearchParams(window.location.search);
         const brandFilter = urlParams.get('brand');
-        fetch(window.location.pathname + '/data' + (brandFilter ? `?brand=${brandFilter}` : ''))
-            .then(response => response.json())
+        const dataUrl = window.location.pathname + '/data' + (brandFilter ? `?brand=${brandFilter}` : '');
+        fetch(dataUrl)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('HTTP status ' + response.status);
+                }
+                return response.json();
+            })
             .then(data => {
                 const container = document.getElementById('content');
                 if (data.promotions && data.promotions.length) {
