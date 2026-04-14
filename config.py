@@ -3,3 +3,5 @@
 STATIC_ADMINS = [390478694]  # ⚠️ ЗАМЕНИТЕ НА СВОЙ ID
 # Статические менеджеры (опционально)
 STATIC_MANAGERS = [390478694]  # если нужны, укажите ID через запятую
+# Имя пользователя бота (без @)
+BOT_USERNAME = os.getenv("BOT_USERNAME", "stalkerco_news_bot")
