@@ -64,53 +64,59 @@ async def show_companies(message: types.Message, state: FSMContext):
     else:
         await process_companies_loading(user_id, phone, state, message)
 
-async def show_banners(message: types.Message, state: FSMContext, brand: str = None):
+async def show_banners(message: types.Message, state: FSMContext, brand: str = None, reply_chat_id: int = None):
     user_id = message.from_user.id
+    if reply_chat_id is None:
+        reply_chat_id = message.chat.id
     companies = db.get_user_companies(user_id)
     if not companies:
-        await message.answer(
+        await message.bot.send_message(reply_chat_id,
             "Для просмотра акций необходимо иметь выбранные компании. "
             "Сначала перейдите в раздел «Мои компании» и загрузите список."
         )
         return
     if len(companies) == 1:
-        await fetch_and_show_banners(message, user_id, companies[0]['code'], brand)
+        await fetch_and_show_banners(message.bot, reply_chat_id, user_id, companies[0]['code'], brand)
     else:
         await state.update_data(brand_filter=brand)
         await state.set_state(states.BannersProcess.choosing_company)
-        await message.answer(
+        await message.bot.send_message(reply_chat_id,
             "У вас несколько компаний. Выберите, для какой показать акции:",
             reply_markup=get_company_selection_keyboard(companies)
         )
 
-async def show_banners_for_partner(message: types.Message, state: FSMContext, partner_id: str, partner_name: str):
-    wait_msg = await message.answer(f"⏳ Проверяем акции для контрагента {partner_id}...")
+async def show_banners_for_partner(message: types.Message, state: FSMContext, partner_id: str, partner_name: str, reply_chat_id: int = None):
+    if reply_chat_id is None:
+        reply_chat_id = message.chat.id
+    wait_msg = await message.bot.send_message(reply_chat_id, f"⏳ Проверяем акции для контрагента {partner_id}...")
     promotions = await asyncio.to_thread(promo_client.get_promotions_list_sync, partner_id)
     if not promotions:
-        await wait_msg.delete()
+        await message.bot.delete_message(reply_chat_id, wait_msg.message_id)
         encoded_name = urllib.parse.quote(partner_name)
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="🌐 Все акции сайта", web_app=WebAppInfo(url=f"{BASE_WEB_URL}/promo/{partner_id}?all=1&name={encoded_name}"))]
         ])
-        await message.answer(
+        await message.bot.send_message(
+            reply_chat_id,
             f"❌ Для контрагента {partner_name} (ID {partner_id}) нет персональных акций.\n"
             "Вы можете посмотреть все действующие акции на сайте:",
             reply_markup=keyboard
         )
-        await message.answer("Выберите действие:", reply_markup=get_back_to_main_keyboard())
+        await message.bot.send_message(reply_chat_id, "Выберите действие:", reply_markup=get_back_to_main_keyboard())
         return
     encoded_name = urllib.parse.quote(partner_name)
     web_app_url = f"{BASE_WEB_URL}/promo/{partner_id}?name={encoded_name}"
     web_app_button = InlineKeyboardButton(text="🎁 Открыть акции", web_app=WebAppInfo(url=web_app_url))
     keyboard = InlineKeyboardMarkup(inline_keyboard=[[web_app_button]])
-    await wait_msg.delete()
-    await message.answer(
+    await message.bot.delete_message(reply_chat_id, wait_msg.message_id)
+    await message.bot.send_message(
+        reply_chat_id,
         f"🎁 *Акции для контрагента {partner_name} (ID {partner_id})*\n\n"
         "Нажмите на кнопку ниже, чтобы открыть страницу с предложениями.",
         parse_mode="Markdown",
         reply_markup=keyboard
     )
-    await message.answer("Выберите действие:", reply_markup=get_back_to_main_keyboard())
+    await message.bot.send_message(reply_chat_id, "Выберите действие:", reply_markup=get_back_to_main_keyboard())
 
 async def show_bonus(message: types.Message, state: FSMContext):
     await message.answer("Выберите раздел:", reply_markup=get_bonus_submenu_keyboard())

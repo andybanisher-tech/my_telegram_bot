@@ -4,7 +4,6 @@ import logging
 from aiogram import Router, types
 from aiogram.fsm.context import FSMContext
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
-from aiogram.enums import ChatType
 from keyboards.common import get_back_to_main_keyboard
 from keyboards.companies import get_company_selection_keyboard
 from states import states
@@ -15,66 +14,37 @@ logger = logging.getLogger(__name__)
 
 BASE_WEB_URL = os.getenv("BASE_WEB_URL", "https://news-bot-stalker.ru")
 
-async def fetch_and_show_banners(message: types.Message, user_id: int, company_code: str, brand_filter: str = None):
-    wait_msg = await message.answer("⏳ Проверяем наличие акций...")
+async def fetch_and_show_banners(bot, chat_id: int, user_id: int, company_code: str, brand_filter: str = None):
+    wait_msg = await bot.send_message(chat_id, "⏳ Проверяем наличие акций...")
     promotions = await asyncio.to_thread(promo_client.get_promotions_list_sync, company_code)
     if not promotions:
-        await wait_msg.delete()
-        # В группе нельзя отправлять WebApp, поэтому шлём ссылку
-        if message.chat.type in (ChatType.GROUP, ChatType.SUPERGROUP):
-            url = f"{BASE_WEB_URL}/promo/{company_code}?all=1"
-            await message.answer(
-                "❌ Для вас нет персональных акций.\n"
-                f"Вы можете посмотреть все действующие акции на сайте: {url}"
-            )
-        else:
-            keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="🌐 Все акции сайта", web_app=WebAppInfo(url=f"{BASE_WEB_URL}/promo/{company_code}?all=1"))]
-            ])
-            await message.answer(
-                "❌ Для вас нет персональных акций.\n"
-                "Вы можете посмотреть все действующие акции на сайте:",
-                reply_markup=keyboard
-            )
-        await message.answer("Выберите действие:", reply_markup=get_back_to_main_keyboard())
+        await bot.delete_message(chat_id, wait_msg.message_id)
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🌐 Все акции сайта", web_app=WebAppInfo(url=f"{BASE_WEB_URL}/promo/{company_code}?all=1"))]
+        ])
+        await bot.send_message(
+            chat_id,
+            "❌ Для вас нет персональных акций.\n"
+            "Вы можете посмотреть все действующие акции на сайте:",
+            reply_markup=keyboard
+        )
+        await bot.send_message(chat_id, "Выберите действие:", reply_markup=get_back_to_main_keyboard())
         return
 
-    # Формируем URL для Web App (персональные акции)
     web_app_url = f"{BASE_WEB_URL}/promo/{company_code}"
     if brand_filter:
         web_app_url += f"?brand={brand_filter}"
-    
-    if message.chat.type in (ChatType.GROUP, ChatType.SUPERGROUP):
-        # В группе не можем использовать WebApp, отправляем ссылку и дублируем в личку
-        await wait_msg.delete()
-        await message.answer(
-            f"🎁 *Ваша персональная подборка акций готова!*\n\n"
-            f"Открыть акции: {web_app_url}\n\n"
-            "Ответ отправлен в личные сообщения.",
-            parse_mode="Markdown"
-        )
-        # Отправляем результат в личку
-        await message.bot.send_message(
-            chat_id=user_id,
-            text="🎁 *Ваша персональная подборка акций готова!*\n\n"
-                 "Нажмите на кнопку ниже, чтобы открыть страницу с предложениями.",
-            parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="🎁 Открыть акции", web_app=WebAppInfo(url=web_app_url))]
-            ])
-        )
-    else:
-        web_app_button = InlineKeyboardButton(text="🎁 Открыть акции", web_app=WebAppInfo(url=web_app_url))
-        keyboard = InlineKeyboardMarkup(inline_keyboard=[[web_app_button]])
-        await wait_msg.delete()
-        await message.answer(
-            "🎁 *Ваша персональная подборка акций готова!*\n\n"
-            "Нажмите на кнопку ниже, чтобы открыть страницу с предложениями.",
-            parse_mode="Markdown",
-            reply_markup=keyboard
-        )
-    
-    await message.answer("Выберите действие:", reply_markup=get_back_to_main_keyboard())
+    web_app_button = InlineKeyboardButton(text="🎁 Открыть акции", web_app=WebAppInfo(url=web_app_url))
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[[web_app_button]])
+    await bot.delete_message(chat_id, wait_msg.message_id)
+    await bot.send_message(
+        chat_id,
+        "🎁 *Ваша персональная подборка акций готова!*\n\n"
+        "Нажмите на кнопку ниже, чтобы открыть страницу с предложениями.",
+        parse_mode="Markdown",
+        reply_markup=keyboard
+    )
+    await bot.send_message(chat_id, "Выберите действие:", reply_markup=get_back_to_main_keyboard())
 
 @router.callback_query(lambda c: c.data.startswith('banner_comp_'), states.BannersProcess.choosing_company)
 async def process_banner_company_choice(callback: types.CallbackQuery, state: FSMContext):
@@ -84,4 +54,6 @@ async def process_banner_company_choice(callback: types.CallbackQuery, state: FS
     await callback.answer("⏳ Загружаем акции...")
     await callback.message.delete()
     await state.clear()
-    await fetch_and_show_banners(callback.message, callback.from_user.id, company_code, brand_filter)
+    # Определяем chat_id для ответа (личное сообщение)
+    chat_id = callback.from_user.id
+    await fetch_and_show_banners(callback.bot, chat_id, callback.from_user.id, company_code, brand_filter)
