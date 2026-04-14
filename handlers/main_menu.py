@@ -8,13 +8,14 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 import database as db
 import promo_client
 from utils.helpers import is_manager
+from handlers.companies import get_companies_keyboard
 from keyboards.common import (
     get_main_keyboard, get_phone_keyboard, get_back_to_main_keyboard,
     get_bonus_submenu_keyboard
 )
 from keyboards.companies import get_companies_view_keyboard, get_company_selection_keyboard
 from keyboards.subscriptions import get_category_choice_keyboard, get_subscription_management_keyboard
-from handlers.companies import process_companies_loading, get_companies_keyboard
+from handlers.companies import process_companies_loading
 from handlers.banners import fetch_and_show_banners
 from handlers.partner_actions import partner_actions_start
 from handlers.bonus import fetch_and_show_balance, fetch_and_show_history
@@ -28,7 +29,7 @@ BASE_WEB_URL = os.getenv("BASE_WEB_URL", "https://news-bot-stalker.ru")
 async def show_main_menu(chat_id: int, user_id: int, bot):
     await bot.send_message(chat_id, "Главное меню:", reply_markup=get_main_keyboard(user_id))
 
-# ---------- Функции для вызова из text_handler ----------
+# ---------- Пользовательские функции ----------
 async def show_balance(message: types.Message, state: FSMContext, reply_chat_id: int):
     user_id = message.from_user.id
     keyboard, error = await get_companies_keyboard(user_id, "balance", message.bot)
@@ -62,7 +63,8 @@ async def show_companies(message: types.Message, state: FSMContext, reply_chat_i
         lines = ["🏢 *Ваши компании:*\n"]
         for comp in companies:
             lines.append(f"• {comp['name']} (код {comp['code']})")
-        await message.bot.send_message(reply_chat_id,
+        await message.bot.send_message(
+            reply_chat_id,
             "\n".join(lines),
             parse_mode="Markdown",
             reply_markup=get_companies_view_keyboard()
@@ -91,7 +93,8 @@ async def show_banners_for_partner(message: types.Message, state: FSMContext, pa
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="🌐 Все акции сайта", web_app=WebAppInfo(url=f"{BASE_WEB_URL}/promo/{partner_id}?all=1&name={encoded_name}"))]
         ])
-        await message.bot.send_message(reply_chat_id,
+        await message.bot.send_message(
+            reply_chat_id,
             f"❌ Для контрагента {partner_name} (ID {partner_id}) нет персональных акций.\n"
             "Вы можете посмотреть все действующие акции на сайте:",
             reply_markup=keyboard
@@ -103,7 +106,8 @@ async def show_banners_for_partner(message: types.Message, state: FSMContext, pa
     web_app_button = InlineKeyboardButton(text="🎁 Открыть акции", web_app=WebAppInfo(url=web_app_url))
     keyboard = InlineKeyboardMarkup(inline_keyboard=[[web_app_button]])
     await message.bot.delete_message(reply_chat_id, wait_msg.message_id)
-    await message.bot.send_message(reply_chat_id,
+    await message.bot.send_message(
+        reply_chat_id,
         f"🎁 *Акции для контрагента {partner_name} (ID {partner_id})*\n\n"
         "Нажмите на кнопку ниже, чтобы открыть страницу с предложениями.",
         parse_mode="Markdown",
@@ -117,7 +121,8 @@ async def show_bonus(message: types.Message, state: FSMContext, reply_chat_id: i
 async def show_subscribe(message: types.Message, state: FSMContext, reply_chat_id: int):
     await state.set_state(states.CategoryChoice.selecting)
     await state.update_data(selected_categories=[])
-    await message.bot.send_message(reply_chat_id,
+    await message.bot.send_message(
+        reply_chat_id,
         "Выберите категории для подписки. Нажимайте на кнопки, чтобы отметить/снять отметку.\n"
         "Когда закончите, нажмите «✅ Готово».",
         reply_markup=get_category_choice_keyboard([])
@@ -128,7 +133,8 @@ async def show_subscriptions(message: types.Message, state: FSMContext, reply_ch
     await state.set_state(states.SubscriptionManagement.selecting)
     current_subs = db.get_user_subscriptions(user_id)
     await state.update_data(selected_subscriptions=current_subs.copy())
-    await message.bot.send_message(reply_chat_id,
+    await message.bot.send_message(
+        reply_chat_id,
         "Управление подписками. Нажимайте на кнопки, чтобы отметить/снять отметку.\n"
         "Когда закончите, нажмите «✅ Готово».",
         reply_markup=get_subscription_management_keyboard(user_id, current_subs)
@@ -156,12 +162,11 @@ async def show_help(message: types.Message, state: FSMContext, reply_chat_id: in
 async def handle_main_menu(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
     text = message.text
-
-    # Определяем, куда отправлять ответ
-    if message.chat.type == "private":
-        reply_chat_id = message.chat.id
-    else:
+    # Для групповых чатов ответ отправляем в личку
+    if message.chat.type != "private":
         reply_chat_id = user_id
+    else:
+        reply_chat_id = message.chat.id
 
     if text == "📰 Подписаться на новости":
         await show_subscribe(message, state, reply_chat_id)
@@ -170,7 +175,7 @@ async def handle_main_menu(message: types.Message, state: FSMContext):
     elif text == "🏢 Мои компании":
         await show_companies(message, state, reply_chat_id)
     elif text == "🎁 Текущие акции":
-        await show_banners(message, state, reply_chat_id=reply_chat_id)
+        await show_banners(message, state, None, reply_chat_id)
     elif text == "🎁 Реферальная программа":
         await show_bonus(message, state, reply_chat_id)
     elif text == "👥 Акции контрагента":
@@ -184,8 +189,8 @@ async def handle_main_menu(message: types.Message, state: FSMContext):
 @router.message(F.text == "◀️ Назад в главное меню")
 async def back_to_main(message: types.Message, state: FSMContext):
     await state.clear()
-    if message.chat.type == "private":
-        chat_id = message.chat.id
+    if message.chat.type != "private":
+        reply_chat_id = message.from_user.id
     else:
-        chat_id = message.from_user.id
-    await message.bot.send_message(chat_id, "Главное меню:", reply_markup=get_main_keyboard(message.from_user.id))
+        reply_chat_id = message.chat.id
+    await message.bot.send_message(reply_chat_id, "Главное меню:", reply_markup=get_main_keyboard(message.from_user.id))

@@ -59,7 +59,6 @@ async def handle_text(message: types.Message, state: FSMContext):
     logger.info(f"Определён интент: {intent} для текста: {text}")
 
     # Определяем, куда отправлять ответ: в личку пользователя (всегда)
-    # Для групповых чатов ответ идёт в личку, для личных – в текущий чат
     if message.chat.type == ChatType.PRIVATE:
         reply_chat_id = message.chat.id
     else:
@@ -94,7 +93,6 @@ async def handle_text(message: types.Message, state: FSMContext):
     elif intent == "help":
         await main_menu.show_help(message, state, reply_chat_id)
     else:
-        # Отправляем fallback-ответ в соответствующий чат
         await message.bot.send_message(
             chat_id=reply_chat_id,
             text="Извините, я не понял ваш запрос. Попробуйте использовать кнопки меню или введите ключевые слова: "

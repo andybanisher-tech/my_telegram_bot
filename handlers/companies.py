@@ -75,10 +75,3 @@ async def handle_contact(message: types.Message, state: FSMContext):
         await message.answer("✅ Номер подтверждён.", reply_markup=types.ReplyKeyboardRemove())
         await state.clear()
         await show_main_menu(message.chat.id, user_id, message.bot)
-
-@router.callback_query(lambda c: c.data == "back_to_main")
-async def back_to_main(callback: types.CallbackQuery, state: FSMContext):
-    await state.clear()
-    await callback.message.delete()
-    await show_main_menu(callback.message.chat.id, callback.from_user.id, callback.bot)
-    await callback.answer()

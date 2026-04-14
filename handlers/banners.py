@@ -17,7 +17,7 @@ async def fetch_and_show_banners(message: types.Message, user_id: int, company_c
     wait_msg = await message.answer("⏳ Проверяем наличие акций...")
     promotions = await asyncio.to_thread(promo_client.get_promotions_list_sync, company_code)
     if not promotions:
-        await message.delete_message(wait_msg.chat.id, wait_msg.message_id)
+        await wait_msg.delete()
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="🌐 Все акции сайта", web_app=WebAppInfo(url=f"{BASE_WEB_URL}/promo/{company_code}?all=1"))]
         ])
@@ -34,7 +34,7 @@ async def fetch_and_show_banners(message: types.Message, user_id: int, company_c
         web_app_url += f"?brand={brand_filter}"
     web_app_button = InlineKeyboardButton(text="🎁 Открыть акции", web_app=WebAppInfo(url=web_app_url))
     keyboard = InlineKeyboardMarkup(inline_keyboard=[[web_app_button]])
-    await message.delete_message(wait_msg.chat.id, wait_msg.message_id)
+    await wait_msg.delete()
     await message.answer(
         "🎁 *Ваша персональная подборка акций готова!*\n\n"
         "Нажмите на кнопку ниже, чтобы открыть страницу с предложениями.",

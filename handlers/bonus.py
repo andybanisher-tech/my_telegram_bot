@@ -2,10 +2,9 @@ import asyncio
 from aiogram import Router, types, F
 from aiogram.fsm.context import FSMContext
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-from aiogram.utils.keyboard import InlineKeyboardBuilder
 import database as db
 import bonus_client
-from keyboards.common import get_main_keyboard, get_bonus_submenu_keyboard
+from keyboards.common import get_bonus_submenu_keyboard, get_back_to_main_keyboard
 from utils.helpers import decline_ball
 from states import BalanceSelecting, HistorySelecting
 import logging
@@ -13,7 +12,8 @@ import logging
 router = Router()
 logger = logging.getLogger(__name__)
 
-# ... (функции show_bonus_submenu, fetch_and_show_balance, fetch_and_show_history остаются без изменений)
+async def show_bonus_submenu(message: types.Message, state: FSMContext, reply_chat_id: int):
+    await message.bot.send_message(reply_chat_id, "Выберите раздел:", reply_markup=get_bonus_submenu_keyboard())
 
 async def fetch_and_show_balance(message: types.Message, user_id: int, company_code: str):
     await message.answer("⏳ Запрашиваем баланс...")
@@ -28,8 +28,7 @@ async def fetch_and_show_balance(message: types.Message, user_id: int, company_c
         await message.answer(text, parse_mode="Markdown")
     else:
         await message.answer("❌ Не удалось получить баланс. Попробуйте позже.")
-    # Показываем подменю реферальной программы
-    await message.answer("Выберите раздел:", reply_markup=get_bonus_submenu_keyboard())
+    await show_bonus_submenu(message, None, message.chat.id)
 
 async def fetch_and_show_history(message: types.Message, user_id: int, company_code: str):
     await message.answer("⏳ Запрашиваем историю...")
@@ -68,18 +67,21 @@ async def fetch_and_show_history(message: types.Message, user_id: int, company_c
                 await message.answer(part, parse_mode="Markdown")
         else:
             await message.answer(text, parse_mode="Markdown")
-    await message.answer("Выберите раздел:", reply_markup=get_bonus_submenu_keyboard())
+    await show_bonus_submenu(message, None, message.chat.id)
 
 @router.message(F.text == "💰 Баланс баллов")
 async def bonus_balance_start(message: types.Message, state: FSMContext):
+    # Определяем reply_chat_id
+    if message.chat.type != "private":
+        reply_chat_id = message.from_user.id
+    else:
+        reply_chat_id = message.chat.id
     user_id = message.from_user.id
-    # Показываем выбор компании через инлайн-клавиатуру (функция из companies.py)
-    from handlers.companies import get_companies_keyboard
     keyboard, error = await get_companies_keyboard(user_id, "balance", message.bot)
     if error:
-        await message.answer(error)
+        await message.bot.send_message(reply_chat_id, error)
         return
-    await message.answer("Выберите компанию для просмотра баланса:", reply_markup=keyboard)
+    await message.bot.send_message(reply_chat_id, "Выберите компанию для просмотра баланса:", reply_markup=keyboard)
     await state.set_state(BalanceSelecting.company)
 
 @router.callback_query(lambda c: c.data.startswith('balance_comp_'), BalanceSelecting.company)
@@ -92,13 +94,16 @@ async def balance_company_chosen(callback: types.CallbackQuery, state: FSMContex
 
 @router.message(F.text == "📜 История баллов")
 async def bonus_history_start(message: types.Message, state: FSMContext):
+    if message.chat.type != "private":
+        reply_chat_id = message.from_user.id
+    else:
+        reply_chat_id = message.chat.id
     user_id = message.from_user.id
-    from handlers.companies import get_companies_keyboard
     keyboard, error = await get_companies_keyboard(user_id, "history", message.bot)
     if error:
-        await message.answer(error)
+        await message.bot.send_message(reply_chat_id, error)
         return
-    await message.answer("Выберите компанию для просмотра истории:", reply_markup=keyboard)
+    await message.bot.send_message(reply_chat_id, "Выберите компанию для просмотра истории:", reply_markup=keyboard)
     await state.set_state(HistorySelecting.company)
 
 @router.callback_query(lambda c: c.data.startswith('history_comp_'), HistorySelecting.company)
@@ -109,10 +114,13 @@ async def history_company_chosen(callback: types.CallbackQuery, state: FSMContex
     await fetch_and_show_history(callback.message, callback.from_user.id, company_code)
     await state.clear()
 
-# Обработчик кнопки "◀️ Отмена" из клавиатуры компаний (перенаправляет в главное меню)
-@router.callback_query(lambda c: c.data == "back_to_main")
+@router.callback_query(lambda c: c.data == "bonus_back_to_main")
 async def bonus_back_to_main(callback: types.CallbackQuery, state: FSMContext):
     await state.clear()
     await callback.message.delete()
-    await callback.message.answer("Главное меню:", reply_markup=get_main_keyboard(callback.from_user.id))
+    if callback.message.chat.type != "private":
+        reply_chat_id = callback.from_user.id
+    else:
+        reply_chat_id = callback.message.chat.id
+    await callback.bot.send_message(reply_chat_id, "Выберите действие:", reply_markup=get_back_to_main_keyboard())
     await callback.answer()
