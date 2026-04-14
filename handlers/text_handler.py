@@ -3,6 +3,7 @@ from aiogram.enums import ChatType
 from aiogram.filters import BaseFilter, Command
 from aiogram.fsm.context import FSMContext
 from intent_classifier import get_intent, load_llm_model, extract_brand
+from config import BOT_USERNAME
 import logging
 import re
 import soap_client
@@ -14,6 +15,11 @@ router = Router()
 logger = logging.getLogger(__name__)
 
 llm = load_llm_model()
+
+def is_bot_mentioned(message: types.Message) -> bool:
+    if not message.text:
+        return False
+    return f"@{BOT_USERNAME}" in message.text
 
 def extract_partner_id(text: str):
     match = re.search(r'([a-zA-Zа-яА-Я])(\d+)', text)
