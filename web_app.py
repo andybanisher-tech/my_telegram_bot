@@ -227,8 +227,7 @@ def promo_data(partner_code):
                 promo_id = promo.get('id')
                 if not promo_id:
                     continue
-                clean_id = str(int(promo_id)) if promo_id.isdigit() else promo_id
-                future = executor.submit(promo_client.get_promotion_details_sync, clean_id)
+                future = executor.submit(promo_client.get_promotion_details_sync, promo_id)
                 future_to_idx[future] = idx
             
             for future in as_completed(future_to_idx):
