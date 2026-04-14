@@ -14,11 +14,11 @@ from keyboards.common import (
 )
 from keyboards.companies import get_companies_view_keyboard, get_company_selection_keyboard
 from keyboards.subscriptions import get_category_choice_keyboard, get_subscription_management_keyboard
-from handlers.companies import process_companies_loading
+from handlers.companies import process_companies_loading, get_companies_keyboard
 from handlers.banners import fetch_and_show_banners
 from handlers.partner_actions import partner_actions_start
-from handlers.bonus import show_company_selection, fetch_and_show_balance, fetch_and_show_history
-from states import states
+from handlers.bonus import fetch_and_show_balance, fetch_and_show_history
+from states import states, BalanceSelecting, HistorySelecting, BannersSelecting
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -28,25 +28,31 @@ BASE_WEB_URL = os.getenv("BASE_WEB_URL", "https://news-bot-stalker.ru")
 async def show_main_menu(chat_id: int, user_id: int, bot):
     await bot.send_message(chat_id, "Главное меню:", reply_markup=get_main_keyboard(user_id))
 
-# ---------- Пользовательские функции ----------
-async def show_balance(message: types.Message, state: FSMContext):
+# ---------- Функции для вызова из text_handler ----------
+async def show_balance(message: types.Message, state: FSMContext, reply_chat_id: int):
     user_id = message.from_user.id
-    company = await show_company_selection(user_id, message, "balance")
-    if company:
-        await fetch_and_show_balance(message, user_id, company['code'])
+    keyboard, error = await get_companies_keyboard(user_id, "balance", message.bot)
+    if error:
+        await message.bot.send_message(reply_chat_id, error)
+        return
+    await message.bot.send_message(reply_chat_id, "Выберите компанию для просмотра баланса:", reply_markup=keyboard)
+    await state.set_state(BalanceSelecting.company)
 
-async def show_history(message: types.Message, state: FSMContext):
+async def show_history(message: types.Message, state: FSMContext, reply_chat_id: int):
     user_id = message.from_user.id
-    company = await show_company_selection(user_id, message, "history")
-    if company:
-        await fetch_and_show_history(message, user_id, company['code'])
+    keyboard, error = await get_companies_keyboard(user_id, "history", message.bot)
+    if error:
+        await message.bot.send_message(reply_chat_id, error)
+        return
+    await message.bot.send_message(reply_chat_id, "Выберите компанию для просмотра истории:", reply_markup=keyboard)
+    await state.set_state(HistorySelecting.company)
 
-async def show_companies(message: types.Message, state: FSMContext):
+async def show_companies(message: types.Message, state: FSMContext, reply_chat_id: int):
     user_id = message.from_user.id
     phone = db.get_user_phone(user_id)
     if not phone:
         await state.set_state(states.CompanyProcess.waiting_for_phone)
-        await message.answer(
+        await message.bot.send_message(reply_chat_id,
             "Для просмотра компаний поделись своим номером телефона.",
             reply_markup=get_phone_keyboard()
         )
@@ -56,38 +62,27 @@ async def show_companies(message: types.Message, state: FSMContext):
         lines = ["🏢 *Ваши компании:*\n"]
         for comp in companies:
             lines.append(f"• {comp['name']} (код {comp['code']})")
-        await message.answer(
+        await message.bot.send_message(reply_chat_id,
             "\n".join(lines),
             parse_mode="Markdown",
             reply_markup=get_companies_view_keyboard()
         )
     else:
-        await process_companies_loading(user_id, phone, state, message)
+        await process_companies_loading(user_id, phone, state, message, reply_chat_id)
 
 async def show_banners(message: types.Message, state: FSMContext, brand: str = None, reply_chat_id: int = None):
+    if reply_chat_id is None:
+        reply_chat_id = message.chat.id
     user_id = message.from_user.id
-    if reply_chat_id is None:
-        reply_chat_id = message.chat.id
-    companies = db.get_user_companies(user_id)
-    if not companies:
-        await message.bot.send_message(reply_chat_id,
-            "Для просмотра акций необходимо иметь выбранные компании. "
-            "Сначала перейдите в раздел «Мои компании» и загрузите список."
-        )
+    keyboard, error = await get_companies_keyboard(user_id, "banners", message.bot)
+    if error:
+        await message.bot.send_message(reply_chat_id, error)
         return
-    if len(companies) == 1:
-        await fetch_and_show_banners(message.bot, reply_chat_id, user_id, companies[0]['code'], brand)
-    else:
-        await state.update_data(brand_filter=brand)
-        await state.set_state(states.BannersProcess.choosing_company)
-        await message.bot.send_message(reply_chat_id,
-            "У вас несколько компаний. Выберите, для какой показать акции:",
-            reply_markup=get_company_selection_keyboard(companies)
-        )
+    await state.update_data(brand_filter=brand)
+    await state.set_state(BannersSelecting.company)
+    await message.bot.send_message(reply_chat_id, "Выберите компанию для показа акций:", reply_markup=keyboard)
 
-async def show_banners_for_partner(message: types.Message, state: FSMContext, partner_id: str, partner_name: str, reply_chat_id: int = None):
-    if reply_chat_id is None:
-        reply_chat_id = message.chat.id
+async def show_banners_for_partner(message: types.Message, state: FSMContext, partner_id: str, partner_name: str, reply_chat_id: int):
     wait_msg = await message.bot.send_message(reply_chat_id, f"⏳ Проверяем акции для контрагента {partner_id}...")
     promotions = await asyncio.to_thread(promo_client.get_promotions_list_sync, partner_id)
     if not promotions:
@@ -96,8 +91,7 @@ async def show_banners_for_partner(message: types.Message, state: FSMContext, pa
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="🌐 Все акции сайта", web_app=WebAppInfo(url=f"{BASE_WEB_URL}/promo/{partner_id}?all=1&name={encoded_name}"))]
         ])
-        await message.bot.send_message(
-            reply_chat_id,
+        await message.bot.send_message(reply_chat_id,
             f"❌ Для контрагента {partner_name} (ID {partner_id}) нет персональных акций.\n"
             "Вы можете посмотреть все действующие акции на сайте:",
             reply_markup=keyboard
@@ -109,8 +103,7 @@ async def show_banners_for_partner(message: types.Message, state: FSMContext, pa
     web_app_button = InlineKeyboardButton(text="🎁 Открыть акции", web_app=WebAppInfo(url=web_app_url))
     keyboard = InlineKeyboardMarkup(inline_keyboard=[[web_app_button]])
     await message.bot.delete_message(reply_chat_id, wait_msg.message_id)
-    await message.bot.send_message(
-        reply_chat_id,
+    await message.bot.send_message(reply_chat_id,
         f"🎁 *Акции для контрагента {partner_name} (ID {partner_id})*\n\n"
         "Нажмите на кнопку ниже, чтобы открыть страницу с предложениями.",
         parse_mode="Markdown",
@@ -118,30 +111,30 @@ async def show_banners_for_partner(message: types.Message, state: FSMContext, pa
     )
     await message.bot.send_message(reply_chat_id, "Выберите действие:", reply_markup=get_back_to_main_keyboard())
 
-async def show_bonus(message: types.Message, state: FSMContext):
-    await message.answer("Выберите раздел:", reply_markup=get_bonus_submenu_keyboard())
+async def show_bonus(message: types.Message, state: FSMContext, reply_chat_id: int):
+    await message.bot.send_message(reply_chat_id, "Выберите раздел:", reply_markup=get_bonus_submenu_keyboard())
 
-async def show_subscribe(message: types.Message, state: FSMContext):
+async def show_subscribe(message: types.Message, state: FSMContext, reply_chat_id: int):
     await state.set_state(states.CategoryChoice.selecting)
     await state.update_data(selected_categories=[])
-    await message.answer(
+    await message.bot.send_message(reply_chat_id,
         "Выберите категории для подписки. Нажимайте на кнопки, чтобы отметить/снять отметку.\n"
         "Когда закончите, нажмите «✅ Готово».",
         reply_markup=get_category_choice_keyboard([])
     )
 
-async def show_subscriptions(message: types.Message, state: FSMContext):
+async def show_subscriptions(message: types.Message, state: FSMContext, reply_chat_id: int):
     user_id = message.from_user.id
     await state.set_state(states.SubscriptionManagement.selecting)
     current_subs = db.get_user_subscriptions(user_id)
     await state.update_data(selected_subscriptions=current_subs.copy())
-    await message.answer(
+    await message.bot.send_message(reply_chat_id,
         "Управление подписками. Нажимайте на кнопки, чтобы отметить/снять отметку.\n"
         "Когда закончите, нажмите «✅ Готово».",
         reply_markup=get_subscription_management_keyboard(user_id, current_subs)
     )
 
-async def show_help(message: types.Message, state: FSMContext):
+async def show_help(message: types.Message, state: FSMContext, reply_chat_id: int):
     user_id = message.from_user.id
     help_text = (
         "📚 *Доступные действия:*\n\n"
@@ -152,9 +145,9 @@ async def show_help(message: types.Message, state: FSMContext):
     if is_manager(user_id):
         help_text += "• 👥 *Акции контрагента* – просмотр акций для любого контрагента по его ID.\n"
     help_text += "\nЕсли у вас есть вопросы, обратитесь к администратору."
-    await message.answer(help_text, parse_mode="Markdown")
+    await message.bot.send_message(reply_chat_id, help_text, parse_mode="Markdown")
 
-# ---------- Обработчики кнопок ----------
+# ---------- Обработчики кнопок главного меню ----------
 @router.message(F.text.in_([
     "📰 Подписаться на новости", "📋 Мои подписки", "🏢 Мои компании",
     "🎁 Текущие акции", "🎁 Реферальная программа", "👥 Акции контрагента",
@@ -164,25 +157,35 @@ async def handle_main_menu(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
     text = message.text
 
+    # Определяем, куда отправлять ответ
+    if message.chat.type == "private":
+        reply_chat_id = message.chat.id
+    else:
+        reply_chat_id = user_id
+
     if text == "📰 Подписаться на новости":
-        await show_subscribe(message, state)
+        await show_subscribe(message, state, reply_chat_id)
     elif text == "📋 Мои подписки":
-        await show_subscriptions(message, state)
+        await show_subscriptions(message, state, reply_chat_id)
     elif text == "🏢 Мои компании":
-        await show_companies(message, state)
+        await show_companies(message, state, reply_chat_id)
     elif text == "🎁 Текущие акции":
-        await show_banners(message, state)
+        await show_banners(message, state, reply_chat_id=reply_chat_id)
     elif text == "🎁 Реферальная программа":
-        await show_bonus(message, state)
+        await show_bonus(message, state, reply_chat_id)
     elif text == "👥 Акции контрагента":
         if not is_manager(user_id):
-            await message.answer("⛔ У вас нет прав для этой команды.")
+            await message.bot.send_message(reply_chat_id, "⛔ У вас нет прав для этой команды.")
             return
         await partner_actions_start(message, state)
     elif text == "ℹ️ Помощь":
-        await show_help(message, state)
+        await show_help(message, state, reply_chat_id)
 
 @router.message(F.text == "◀️ Назад в главное меню")
 async def back_to_main(message: types.Message, state: FSMContext):
     await state.clear()
-    await message.answer("Главное меню:", reply_markup=get_main_keyboard(message.from_user.id))
+    if message.chat.type == "private":
+        chat_id = message.chat.id
+    else:
+        chat_id = message.from_user.id
+    await message.bot.send_message(chat_id, "Главное меню:", reply_markup=get_main_keyboard(message.from_user.id))
