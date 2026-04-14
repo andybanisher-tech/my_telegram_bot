@@ -8,6 +8,7 @@ import database as db
 import bonus_client
 from keyboards.common import get_main_keyboard, get_bonus_submenu_keyboard, get_back_to_main_keyboard
 from utils.helpers import decline_ball
+from states import BalanceSelecting, HistorySelecting
 import logging
 
 router = Router()
@@ -16,8 +17,10 @@ logger = logging.getLogger(__name__)
 class BonusProcess(StatesGroup):
     choosing_company = State()
 
-async def show_bonus_submenu(message: types.Message, state: FSMContext):
-    await message.answer("Выберите раздел:", reply_markup=get_bonus_submenu_keyboard())
+async def show_bonus_submenu(message: types.Message, state: FSMContext, reply_chat_id: int = None):
+    if reply_chat_id is None:
+        reply_chat_id = message.chat.id
+    await message.bot.send_message(reply_chat_id, "Выберите раздел:", reply_markup=get_bonus_submenu_keyboard())
 
 async def show_company_selection(user_id: int, message: types.Message, action: str):
     companies = db.get_user_companies(user_id)
@@ -46,8 +49,8 @@ async def fetch_and_show_balance(message: types.Message, user_id: int, company_c
             text += f"\n\nПроцент применения: {percent}%"
         await message.answer(text, parse_mode="Markdown")
     else:
-        await message.answer("❌ Не удалось получить баланс. Попробувайте позже.")
-    await show_bonus_submenu(message, None)
+        await message.answer("❌ Не удалось получить баланс. Попробуйте позже.")
+    await show_bonus_submenu(message, None, message.chat.id)
 
 async def fetch_and_show_history(message: types.Message, user_id: int, company_code: str):
     await message.answer("⏳ Запрашиваем историю...")
@@ -86,7 +89,7 @@ async def fetch_and_show_history(message: types.Message, user_id: int, company_c
                 await message.answer(part, parse_mode="Markdown")
         else:
             await message.answer(text, parse_mode="Markdown")
-    await show_bonus_submenu(message, None)
+    await show_bonus_submenu(message, None, message.chat.id)
 
 @router.message(F.text == "💰 Баланс баллов")
 async def bonus_balance_start(message: types.Message, state: FSMContext):
@@ -120,5 +123,9 @@ async def bonus_history_company_chosen(callback: types.CallbackQuery, state: FSM
 async def bonus_back_to_main(callback: types.CallbackQuery, state: FSMContext):
     await state.clear()
     await callback.message.delete()
-    await show_bonus_submenu(callback.message, state)
+    if callback.message.chat.type != "private":
+        reply_chat_id = callback.from_user.id
+    else:
+        reply_chat_id = callback.message.chat.id
+    await callback.bot.send_message(reply_chat_id, "Выберите действие:", reply_markup=get_back_to_main_keyboard())
     await callback.answer()

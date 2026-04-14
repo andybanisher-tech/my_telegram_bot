@@ -29,7 +29,6 @@ BASE_WEB_URL = os.getenv("BASE_WEB_URL", "https://news-bot-stalker.ru")
 async def show_main_menu(chat_id: int, user_id: int, bot):
     await bot.send_message(chat_id, "Главное меню:", reply_markup=get_main_keyboard(user_id))
 
-# ---------- Пользовательские функции ----------
 async def show_balance(message: types.Message, state: FSMContext, reply_chat_id: int):
     user_id = message.from_user.id
     keyboard, error = await get_companies_keyboard(user_id, "balance", message.bot)
@@ -162,7 +161,6 @@ async def show_help(message: types.Message, state: FSMContext, reply_chat_id: in
 async def handle_main_menu(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
     text = message.text
-    # Для групповых чатов ответ отправляем в личку
     if message.chat.type != "private":
         reply_chat_id = user_id
     else:

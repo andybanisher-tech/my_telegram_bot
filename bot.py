@@ -9,8 +9,6 @@ from pathlib import Path
 import database as db
 import soap_client
 import bitrix_client
-from handlers.admin import admins as admin_admins
-from handlers.admin import managers as admin_managers
 from handlers import (
     start, main_menu, companies, subscriptions, banners, partner_actions, bonus,
     admin_news, admin_categories, admin_admins, admin_stats, admin_managers,
@@ -19,7 +17,6 @@ from handlers import (
 from utils.set_bot_commands import set_bot_commands
 from intent_classifier import load_llm_model
 
-# Загружаем переменные окружения
 env_path = Path(__file__).parent / '.env'
 load_dotenv(dotenv_path=env_path)
 
@@ -37,7 +34,6 @@ storage = MemoryStorage()
 bot = Bot(token=TOKEN)
 dp = Dispatcher(storage=storage)
 
-# Регистрируем все роутеры (важен порядок)
 dp.include_router(start.router)
 dp.include_router(main_menu.router)
 dp.include_router(companies.router)
@@ -51,7 +47,7 @@ dp.include_router(admin_admins.router)
 dp.include_router(admin_stats.router)
 dp.include_router(admin_managers.router)
 dp.include_router(admin_set_bitrix_key.router)
-dp.include_router(text_handler.router)  # последним
+dp.include_router(text_handler.router)
 
 async def main():
     await set_bot_commands(bot)

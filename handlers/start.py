@@ -13,5 +13,5 @@ async def cmd_start(message: types.Message, state: FSMContext):
     db.add_user(user.id, user.username, user.first_name)
     await message.answer(
         f"👋 Привет, {user.first_name}!\nВыбери действие:",
-        reply_markup=get_main_keyboard(user.id)  # ← передаём user_id
+        reply_markup=get_main_keyboard(user.id)
     )

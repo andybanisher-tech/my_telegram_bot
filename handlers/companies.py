@@ -16,7 +16,6 @@ async def show_main_menu(chat_id: int, user_id: int, bot):
     await bot.send_message(chat_id, "Главное меню:", reply_markup=get_main_keyboard(user_id))
 
 async def get_companies_keyboard(user_id: int, action: str, bot=None):
-    """Возвращает инлайн-клавиатуру со списком компаний для выбранного действия."""
     companies = db.get_user_companies(user_id)
     if not companies:
         return None, "У вас нет выбранных компаний. Сначала выберите компании в разделе «Мои компании»."
@@ -30,7 +29,7 @@ async def get_companies_keyboard(user_id: int, action: str, bot=None):
 
 @router.callback_query(lambda c: c.data.startswith('refresh_companies_'))
 async def refresh_companies_list(callback: types.CallbackQuery, state: FSMContext):
-    action = callback.data.split('_')[2]  # balance, history, banners
+    action = callback.data.split('_')[2]
     user_id = callback.from_user.id
     phone = db.get_user_phone(user_id)
     if not phone:

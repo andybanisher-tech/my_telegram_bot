@@ -3,9 +3,9 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from utils.helpers import is_manager
 
 def get_main_keyboard(user_id: int = None):
-    """Главное меню (без пунктов подписки)."""
     buttons = [
-        # Строки с "📰 Подписаться на новости" и "📋 Мои подписки" удалены
+        [KeyboardButton(text="📰 Подписаться на новости")],
+        [KeyboardButton(text="📋 Мои подписки")],
         [KeyboardButton(text="🏢 Мои компании")],
         [KeyboardButton(text="🎁 Текущие акции")],
         [KeyboardButton(text="🎁 Реферальная программа")],
@@ -15,7 +15,6 @@ def get_main_keyboard(user_id: int = None):
     buttons.append([KeyboardButton(text="ℹ️ Помощь")])
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
 
-# Остальные функции без изменений
 def get_bonus_submenu_keyboard():
     kb = [
         [KeyboardButton(text="💰 Баланс баллов")],

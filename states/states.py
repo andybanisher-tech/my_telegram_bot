@@ -38,7 +38,6 @@ class ManagerManagement(StatesGroup):
     waiting_for_new_manager_name = State()
     choosing_manager_to_remove = State()
 
-# Новые состояния для выбора компании
 class BalanceSelecting(StatesGroup):
     company = State()
 

@@ -32,5 +32,4 @@ async def partner_id_received(message: types.Message, state: FSMContext):
         return
     partner_name = partner_info.get('name', partner_id)
     await state.clear()
-    # Используем новую функцию для показа акций через Web App
-    await main_menu.show_banners_for_partner(message, state, partner_id, partner_name)
+    await main_menu.show_banners_for_partner(message, state, partner_id, partner_name, message.chat.id)
