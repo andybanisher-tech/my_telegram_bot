@@ -1,5 +1,6 @@
 from aiogram import Router, types, F
-from aiogram.filters import BaseFilter
+from aiogram.enums import ChatType
+from aiogram.filters import BaseFilter, Command
 from aiogram.fsm.context import FSMContext
 from intent_classifier import get_intent, load_llm_model, extract_brand
 import logging
@@ -25,7 +26,21 @@ class NoActiveStateFilter(BaseFilter):
         current_state = await state.get_state()
         return current_state is None
 
-@router.message(NoActiveStateFilter(), F.text, lambda msg: not msg.text.startswith('/'))
+def is_bot_mentioned(message: types.Message) -> bool:
+    """Проверяет, упомянут ли бот в сообщении."""
+    if not message.text:
+        return False
+    return f"@{message.bot.username}" in message.text
+
+@router.message(
+    NoActiveStateFilter(),
+    F.text,
+    lambda msg: not msg.text.startswith('/'),
+    lambda msg: msg.chat.type == ChatType.PRIVATE or (
+        msg.chat.type in (ChatType.GROUP, ChatType.SUPERGROUP) and 
+        is_bot_mentioned(msg)
+    )
+)
 async def handle_text(message: types.Message, state: FSMContext):
     global llm
     user_id = message.from_user.id
