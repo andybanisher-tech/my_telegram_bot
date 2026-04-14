@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 llm = load_llm_model()
 
-BOT_USERNAME = "stalkerco_news_bot"   # замените на актуальное имя
+BOT_USERNAME = "stalkerco_news_bot"   # замените на актуальное имя бота
 
 def extract_partner_id(text: str):
     match = re.search(r'([a-zA-Zа-яА-Я])(\d+)', text)
@@ -57,11 +57,18 @@ async def handle_text(message: types.Message, state: FSMContext):
     intent = get_intent(text, llm)
     logger.info(f"Определён интент: {intent} для текста: {text}")
 
+    # Определяем, куда отправлять ответ
     if message.chat.type == ChatType.PRIVATE:
         reply_chat_id = message.chat.id
     else:
         reply_chat_id = user_id
+        # Отправляем уведомление в группу
+        await message.reply(
+            f"@{message.from_user.username}, я отвечу вам в личные сообщения. Пожалуйста, проверьте их.",
+            reply_to_message_id=message.message_id
+        )
 
+    # Обработка интентов (без изменений)
     if intent == "balance":
         await main_menu.show_balance(message, state, reply_chat_id)
     elif intent == "history":
