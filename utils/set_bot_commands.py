@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 async def set_bot_commands(bot):
     default_commands = [
         BotCommand(command="start", description="👋 Главное меню"),
-        BotCommand(command="cancel", description="❌ Отменить текущее действие"),
+        #BotCommand(command="cancel", description="❌ Отменить текущее действие"),
     ]
     await bot.set_my_commands(default_commands, scope=BotCommandScopeDefault())
 

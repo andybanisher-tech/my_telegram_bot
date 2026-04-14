@@ -29,6 +29,7 @@ BASE_WEB_URL = os.getenv("BASE_WEB_URL", "https://news-bot-stalker.ru")
 async def show_main_menu(chat_id: int, user_id: int, bot):
     await bot.send_message(chat_id, "Главное меню:", reply_markup=get_main_keyboard(user_id))
 
+# ---------- Пользовательские функции ----------
 async def show_balance(message: types.Message, state: FSMContext, reply_chat_id: int):
     user_id = message.from_user.id
     keyboard, error = await get_companies_keyboard(user_id, "balance", message.bot)
@@ -117,28 +118,6 @@ async def show_banners_for_partner(message: types.Message, state: FSMContext, pa
 async def show_bonus(message: types.Message, state: FSMContext, reply_chat_id: int):
     await message.bot.send_message(reply_chat_id, "Выберите раздел:", reply_markup=get_bonus_submenu_keyboard())
 
-async def show_subscribe(message: types.Message, state: FSMContext, reply_chat_id: int):
-    await state.set_state(states.CategoryChoice.selecting)
-    await state.update_data(selected_categories=[])
-    await message.bot.send_message(
-        reply_chat_id,
-        "Выберите категории для подписки. Нажимайте на кнопки, чтобы отметить/снять отметку.\n"
-        "Когда закончите, нажмите «✅ Готово».",
-        reply_markup=get_category_choice_keyboard([])
-    )
-
-async def show_subscriptions(message: types.Message, state: FSMContext, reply_chat_id: int):
-    user_id = message.from_user.id
-    await state.set_state(states.SubscriptionManagement.selecting)
-    current_subs = db.get_user_subscriptions(user_id)
-    await state.update_data(selected_subscriptions=current_subs.copy())
-    await message.bot.send_message(
-        reply_chat_id,
-        "Управление подписками. Нажимайте на кнопки, чтобы отметить/снять отметку.\n"
-        "Когда закончите, нажмите «✅ Готово».",
-        reply_markup=get_subscription_management_keyboard(user_id, current_subs)
-    )
-
 async def show_help(message: types.Message, state: FSMContext, reply_chat_id: int):
     user_id = message.from_user.id
     help_text = (
@@ -154,8 +133,10 @@ async def show_help(message: types.Message, state: FSMContext, reply_chat_id: in
 
 # ---------- Обработчики кнопок главного меню ----------
 @router.message(F.text.in_([
-    "📰 Подписаться на новости", "📋 Мои подписки", "🏢 Мои компании",
-    "🎁 Текущие акции", "🎁 Реферальная программа", "👥 Акции контрагента",
+    "🏢 Мои компании",
+    "🎁 Текущие акции",
+    "🎁 Реферальная программа",
+    "👥 Акции контрагента",
     "ℹ️ Помощь"
 ]))
 async def handle_main_menu(message: types.Message, state: FSMContext):
@@ -166,11 +147,7 @@ async def handle_main_menu(message: types.Message, state: FSMContext):
     else:
         reply_chat_id = message.chat.id
 
-    if text == "📰 Подписаться на новости":
-        await show_subscribe(message, state, reply_chat_id)
-    elif text == "📋 Мои подписки":
-        await show_subscriptions(message, state, reply_chat_id)
-    elif text == "🏢 Мои компании":
+    if text == "🏢 Мои компании":
         await show_companies(message, state, reply_chat_id)
     elif text == "🎁 Текущие акции":
         await show_banners(message, state, None, reply_chat_id)
@@ -192,3 +169,14 @@ async def back_to_main(message: types.Message, state: FSMContext):
     else:
         reply_chat_id = message.chat.id
     await message.bot.send_message(reply_chat_id, "Главное меню:", reply_markup=get_main_keyboard(message.from_user.id))
+
+@router.callback_query(lambda c: c.data == "back_to_main")
+async def back_to_main_callback(callback: types.CallbackQuery, state: FSMContext):
+    await state.clear()
+    if callback.message.chat.type != "private":
+        reply_chat_id = callback.from_user.id
+    else:
+        reply_chat_id = callback.message.chat.id
+    await callback.message.delete()
+    await callback.bot.send_message(reply_chat_id, "Главное меню:", reply_markup=get_main_keyboard(callback.from_user.id))
+    await callback.answer()
