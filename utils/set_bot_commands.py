@@ -13,12 +13,12 @@ async def set_bot_commands(bot):
     await bot.set_my_commands(default_commands, scope=BotCommandScopeDefault())
 
     admin_extra = [
-    BotCommand(command="admin", description="📢 Создать новость"),
-    BotCommand(command="stats", description="📊 Статистика"),
-    BotCommand(command="categories", description="🏷️ Управление категориями"),
-    BotCommand(command="manage_admins", description="👥 Управление админами"),
-    BotCommand(command="manage_managers", description="👥 Управление менеджерами"),
-    BotCommand(command="send", description="✉️ Быстрая рассылка"),
+    #BotCommand(command="admin", description="📢 Создать новость"),
+    #BotCommand(command="stats", description="📊 Статистика"),
+    #BotCommand(command="categories", description="🏷️ Управление категориями"),
+    #BotCommand(command="manage_admins", description="👥 Управление админами"),
+    #BotCommand(command="manage_managers", description="👥 Управление менеджерами"),
+    #BotCommand(command="send", description="✉️ Быстрая рассылка"),
 ]
     admin_full = default_commands + admin_extra
     
