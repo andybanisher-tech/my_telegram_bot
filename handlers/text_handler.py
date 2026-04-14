@@ -16,10 +16,7 @@ logger = logging.getLogger(__name__)
 
 llm = load_llm_model()
 
-def is_bot_mentioned(message: types.Message) -> bool:
-    if not message.text:
-        return False
-    return f"@{BOT_USERNAME}" in message.text
+
 
 def extract_partner_id(text: str):
     match = re.search(r'([a-zA-Zа-яА-Я])(\d+)', text)
@@ -33,10 +30,9 @@ class NoActiveStateFilter(BaseFilter):
         return current_state is None
 
 def is_bot_mentioned(message: types.Message) -> bool:
-    """Проверяет, упомянут ли бот в сообщении."""
     if not message.text:
         return False
-    return f"@{message.bot.username}" in message.text
+    return f"@stalkerco_news_bot" in message.text
 
 @router.message(
     NoActiveStateFilter(),
