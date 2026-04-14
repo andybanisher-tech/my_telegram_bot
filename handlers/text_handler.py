@@ -63,12 +63,16 @@ async def handle_text(message: types.Message, state: FSMContext):
     else:
         reply_chat_id = user_id
         # Отправляем уведомление в группу
-        await message.reply(
-            f"@{message.from_user.username}, я отвечу вам в личные сообщения. Пожалуйста, проверьте их.",
-            reply_to_message_id=message.message_id
-        )
+        try:
+            await message.reply(
+                f"@{message.from_user.username}, я отвечу вам в личные сообщения. Пожалуйста, проверьте их.",
+                reply_to_message_id=message.message_id
+            )
+            logger.info(f"Отправлено уведомление в группу для {message.from_user.username}")
+        except Exception as e:
+            logger.error(f"Ошибка отправки уведомления в группу: {e}")
 
-    # Обработка интентов (без изменений)
+    # Обработка интентов
     if intent == "balance":
         await main_menu.show_balance(message, state, reply_chat_id)
     elif intent == "history":
