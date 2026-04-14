@@ -1,66 +1,72 @@
-import requests
+import aiohttp
+import ssl
 import logging
 import os
-from typing import List, Dict, Any, Optional
+from typing import Optional, Dict, Any, List
 
 logger = logging.getLogger(__name__)
 
-PROMO_LIST_URL = "https://exchange.mirlk.ru/SiteExch/hs/site/UrGetPersonalPromotions"
-PROMO_DETAIL_URL = "https://stalker-co.ru/bitrix/tools/mlk_tgbotapi_promo.php"
-
-def get_config():
+def get_bonus_config():
     return {
-        "promo_detail_key": os.getenv("PROMO_API_KEY") or os.getenv("BITRIX_API_KEY"),  # используем BITRIX_API_KEY как fallback
-        "auth_key": os.getenv("BONUS_API_KEY"),
+        "api_key": os.getenv("BONUS_API_KEY"),
+        "base_url": os.getenv("BONUS_API_BASE", "https://exchange.mirlk.ru/SiteExch/hs/site"),
         "site_id": os.getenv("BONUS_SITE_ID", "113")
     }
 
-def get_promotions_list_sync(partner_id: str) -> Optional[List[Dict[str, Any]]]:
-    config = get_config()
-    if not config["auth_key"]:
+async def get_bonus_balance(partner_id: str) -> Optional[Dict[str, Any]]:
+    config = get_bonus_config()
+    if not config["api_key"]:
         logger.error("BONUS_API_KEY не задан в .env")
         return None
+    url = f"{config['base_url']}/UrGetBonusBalance"
     params = {
-        "IDPartner": partner_id,
-        "SiteID": config["site_id"]
+        "SiteID": config["site_id"],
+        "IDPartner": partner_id
     }
     headers = {
-        "Authorization": config["auth_key"],
+        "Authorization": config["api_key"],
         "Accept": "application/json"
     }
+    ssl_context = ssl.create_default_context()
+    ssl_context.check_hostname = False
+    ssl_context.verify_mode = ssl.CERT_NONE
     try:
-        response = requests.get(PROMO_LIST_URL, params=params, headers=headers, timeout=30)
-        if response.status_code != 200:
-            logger.error(f"Ошибка API списка акций: статус {response.status_code}")
-            return None
-        data = response.json()
-        if isinstance(data, dict) and "promotions" in data:
-            return data["promotions"]
-        elif isinstance(data, list):
-            return data
-        else:
-            logger.error(f"Неожиданный формат ответа: {data}")
-            return None
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, params=params, headers=headers, timeout=30, ssl=ssl_context) as resp:
+                if resp.status != 200:
+                    logger.error(f"Ошибка API баланса: статус {resp.status}")
+                    return None
+                data = await resp.json()
+                return data
     except Exception as e:
-        logger.error(f"Исключение при запросе списка акций: {e}")
+        logger.error(f"Исключение при запросе баланса: {e}")
         return None
 
-def get_promotion_details_sync(promo_id: str) -> Optional[Dict[str, Any]]:
-    config = get_config()
-    api_key = config.get("promo_detail_key")
-    if not api_key:
-        logger.error("PROMO_API_KEY или BITRIX_API_KEY не задан в .env")
+async def get_bonus_history(partner_id: str) -> Optional[List[Dict[str, Any]]]:
+    config = get_bonus_config()
+    if not config["api_key"]:
+        logger.error("BONUS_API_KEY не задан в .env")
         return None
+    url = f"{config['base_url']}/UrGetBonusHistory"
     params = {
-        "key": api_key,
-        "promoid": promo_id
+        "SiteID": config["site_id"],
+        "IDPartner": partner_id
     }
+    headers = {
+        "Authorization": config["api_key"],
+        "Accept": "application/json"
+    }
+    ssl_context = ssl.create_default_context()
+    ssl_context.check_hostname = False
+    ssl_context.verify_mode = ssl.CERT_NONE
     try:
-        response = requests.get(PROMO_DETAIL_URL, params=params, timeout=30)
-        if response.status_code != 200:
-            logger.error(f"Ошибка API деталей акции {promo_id}: статус {response.status_code}")
-            return None
-        return response.json()
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, params=params, headers=headers, timeout=30, ssl=ssl_context) as resp:
+                if resp.status != 200:
+                    logger.error(f"Ошибка API истории: статус {resp.status}")
+                    return None
+                data = await resp.json()
+                return data.get("lines", [])
     except Exception as e:
-        logger.error(f"Исключение при запросе деталей акции {promo_id}: {e}")
+        logger.error(f"Исключение при запросе истории: {e}")
         return None
