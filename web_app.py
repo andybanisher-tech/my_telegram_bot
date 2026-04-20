@@ -197,9 +197,11 @@ def promo_page(partner_code):
 def promo_data(partner_code):
     all_mode = request.args.get('all') == '1'
     brand_filter = request.args.get('brand')
+    logger.info(f"Запрос данных: partner={partner_code}, all={all_mode}, brand={brand_filter}")
     if all_mode:
         banners = bitrix_client.get_banners_sync(partner_code)
         if not banners:
+            logger.warning("Нет баннеров для all_mode")
             return jsonify({"promotions": []}), 404
         enriched = []
         for banner in banners:
@@ -213,13 +215,14 @@ def promo_data(partner_code):
             })
         if brand_filter:
             enriched = [p for p in enriched if brand_filter.lower() in p['name'].lower()]
+        logger.info(f"Отправлено {len(enriched)} общих акций")
         return jsonify({"promotions": enriched})
     else:
         promotions_list = promo_client.get_promotions_list_sync(partner_code)
         if not promotions_list:
+            logger.warning("Нет персональных акций")
             return jsonify({"promotions": []}), 404
         
-        # Собираем все ID акций
         promo_ids = []
         promo_map = {}
         for promo in promotions_list:
@@ -227,12 +230,14 @@ def promo_data(partner_code):
             if promo_id:
                 promo_ids.append(promo_id)
                 promo_map[promo_id] = promo
+        logger.info(f"Собрано ID акций: {promo_ids}")
         
         if not promo_ids:
+            logger.warning("Нет ID акций")
             return jsonify({"promotions": []}), 404
         
-        # Загружаем детали всех акций одним запросом
         details_map = promo_client.get_promotion_details_batch_sync(promo_ids)
+        logger.info(f"Получены детали для {len(details_map)} акций")
         
         enriched = []
         for promo_id, promo in promo_map.items():
@@ -249,6 +254,7 @@ def promo_data(partner_code):
                 'mark': clean_text(promo.get('mark', '')),
                 'date_to': clean_text(promo.get('date_to', ''))
             })
+        logger.info(f"Отправлено {len(enriched)} персональных акций")
         return jsonify({"promotions": enriched})
 
 @app.route('/health')
