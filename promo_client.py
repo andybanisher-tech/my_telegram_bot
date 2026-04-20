@@ -30,13 +30,17 @@ def get_promotions_list_sync(partner_id: str) -> Optional[List[Dict[str, Any]]]:
     }
     try:
         response = requests.get(PROMO_LIST_URL, params=params, headers=headers, timeout=30)
+        logger.info(f"Список акций: статус {response.status_code}")
         if response.status_code != 200:
             logger.error(f"Ошибка API списка акций: статус {response.status_code}")
             return None
         data = response.json()
         if isinstance(data, dict) and "promotions" in data:
-            return data["promotions"]
+            promotions = data["promotions"]
+            logger.info(f"Получено {len(promotions)} акций из списка")
+            return promotions
         elif isinstance(data, list):
+            logger.info(f"Получено {len(data)} акций (массив)")
             return data
         else:
             logger.error(f"Неожиданный формат ответа: {data}")
@@ -56,19 +60,23 @@ def get_promotion_details_batch_sync(promo_ids: List[str]) -> Dict[str, Dict[str
         logger.error("PROMO_API_KEY или BITRIX_API_KEY не задан в .env")
         return {}
     if not promo_ids:
+        logger.warning("Список ID акций пуст")
         return {}
-    # Формируем строку ID через запятую
-    ids_string = ','.join(promo_ids)
+    # Убираем возможные пробелы и объединяем через запятую
+    ids_string = ','.join([pid.strip() for pid in promo_ids])
+    logger.info(f"Запрос деталей для {len(promo_ids)} акций, IDs: {ids_string}")
     params = {
         "key": api_key,
         "promoids": ids_string
     }
     try:
         response = requests.get(PROMO_DETAIL_URL, params=params, timeout=30)
+        logger.info(f"Детали акций: статус {response.status_code}")
         if response.status_code != 200:
             logger.error(f"Ошибка API деталей акций: статус {response.status_code}")
             return {}
         data = response.json()
+        logger.info(f"Получен ответ: {data}")
         if not isinstance(data, list):
             logger.error(f"Неожиданный формат ответа: {data}")
             return {}
@@ -77,12 +85,16 @@ def get_promotion_details_batch_sync(promo_ids: List[str]) -> Dict[str, Dict[str
             promo_id = item.get('id')
             if promo_id:
                 result[str(promo_id)] = item
+                logger.debug(f"Детали для акции {promo_id}: {item.get('name')}")
+            else:
+                logger.warning(f"Пропущен элемент без id: {item}")
+        logger.info(f"Успешно загружено деталей: {len(result)} из {len(promo_ids)}")
         return result
     except Exception as e:
         logger.error(f"Исключение при запросе деталей акций: {e}")
         return {}
 
-# Старая функция оставлена для обратной совместимости (если используется где-то ещё)
+# Для обратной совместимости
 def get_promotion_details_sync(promo_id: str) -> Optional[Dict[str, Any]]:
     result = get_promotion_details_batch_sync([promo_id])
     return result.get(promo_id)
