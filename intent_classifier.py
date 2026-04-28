@@ -1,7 +1,6 @@
 import os
 import logging
-import re
-from typing import Optional, Tuple
+from typing import Optional
 from llama_cpp import Llama
 
 logger = logging.getLogger(__name__)
@@ -30,7 +29,8 @@ KEYWORDS = {
         "мои компании", "какие компании", "организации", "фирмы"
     ],
     "banners": [
-        "акции", "предложения", "скидки", "актуальные акции", "что нового", "распродажи"
+        "акции", "предложения", "скидки", "актуальные акции", "что нового",
+        "распродажи", "распродажа"
     ],
     "bonus": [
         "реферальная", "программа", "партнерская", "рефералка"
@@ -100,267 +100,61 @@ def get_intent(text: str, llm) -> Optional[str]:
         return intent
     return get_intent_by_llm(text, llm)
 
-def extract_partner_id(text: str) -> Optional[str]:
-    """Извлекает ID контрагента из текста (например, С88201, Т0066007)."""
-    # Паттерн: буква (русская или латинская) + цифры (от 1 до 20 символов)
-    match = re.search(r'([A-Za-zА-Яа-я])(\d{1,20})', text)
-    if match:
-        return match.group(0)  # возвращаем полное совпадение, например "С88201"
-    return None
+# Словарь синонимов для брендов (можно оставить или убрать)
+BRAND_MAPPING = {
+    "матрикс": "Matrix",
+    "карал": "Kaaral",
+    "орибе": "Oribe",
+    "кутем": "Qtem",
+    "виши": "Vichy",
+    "лореаль": "L'Oreal",
+    "л'ореаль": "L'Oreal",
+    "ла рош позе": "La Roche Posay",
+    "кевин мерфи": "Kevin Murphy",
+    "кевин": "Kevin Murphy",
+    "кеун": "Keune",
+    "митчелл": "Mitchell",
+    "иноа": "Inoa",
+    "мажи": "Majirel",
+    "диа": "Dia",
+    "соколор": "Socolor",
+    "кутран": "Cutrin",
+    "бельарти": "Bellarti",
+    "биогель": "Biogel",
+    "репа": "Repair",
+    "тефиа": "Tefia"
+}
 
 def extract_brand(text: str, llm) -> Optional[str]:
+    """Извлекает название бренда из запроса, используя LLM, с fallback."""
     if not llm:
         return None
     text_lower = text.lower()
-    # Быстрый fallback для часто встречающихся брендов
-    brand_map = {
-        # American Crew
-        "американ крю": "American Crew",
-        "американкрю": "American Crew",
-        "american crew": "American Crew",
-        "амкрю": "American Crew",
-        # Matrix
-        "матрикс": "Matrix",
-        "матрик": "Matrix",
-        "матрица": "Matrix",
-        "matric": "Matrix",
-        "matrix": "Matrix",
-        "матракс": "Matrix",
-
-        # Kaaral
-        "карал": "Kaaral",
-        "караль": "Kaaral",
-        "каралл": "Kaaral",
-        "kaaral": "Kaaral",
-        "каралс": "Kaaral",
-
-        # Oribe
-        "орибе": "Oribe",
-        "ориб": "Oribe",
-        "oribe": "Oribe",
-
-        # Qtem
-        "кутем": "Qtem",
-        "кутемс": "Qtem",
-        "qtem": "Qtem",
-        "кютем": "Qtem",
-
-        # Vichy
-        "виши": "Vichy",
-        "виши": "Vichy",
-        "vichy": "Vichy",
-
-        # L'Oreal
-        "лореаль": "L'Oreal",
-        "лореал": "L'Oreal",
-        "loreal": "L'Oreal",
-        "лореаль париж": "L'Oreal",
-        "l'oréal": "L'Oreal",
-        "l'oreal": "L'Oreal",
-
-        # La Roche Posay
-        "ла рош позе": "La Roche Posay",
-        "ларошпозе": "La Roche Posay",
-        "la roche": "La Roche Posay",
-        "ла рош": "La Roche Posay",
-        "ларош": "La Roche Posay",
-
-        # Kevin Murphy
-        "кевин мерфи": "Kevin Murphy",
-        "кевин": "Kevin Murphy",
-        "kevin murphy": "Kevin Murphy",
-        "кевин мёрфи": "Kevin Murphy",
-
-        # Keune
-        "кеун": "Keune",
-        "кеуне": "Keune",
-        "keune": "Keune",
-
-        # Mitchell
-        "митчелл": "Mitchell",
-        "митчел": "Mitchell",
-        "mitchell": "Mitchell",
-
-        # Inoa
-        "иноа": "Inoa",
-        "inoa": "Inoa",
-
-        # Majirel
-        "мажи": "Majirel",
-        "мажирель": "Majirel",
-        "majirel": "Majirel",
-
-        # Dia
-        "диа": "Dia",
-        "dia": "Dia",
-
-        # Socolor
-        "соколор": "Socolor",
-        "socolor": "Socolor",
-
-        # Cutrin
-        "кутран": "Cutrin",
-        "cutrin": "Cutrin",
-
-        # Bellarti
-        "бельарти": "Bellarti",
-        "белларти": "Bellarti",
-        "bellarti": "Bellarti",
-
-        # Biogel
-        "биогель": "Biogel",
-        "biogel": "Biogel",
-
-        # Repair
-        "репа": "Repair",
-        "репейр": "Repair",
-        "repair": "Repair",
-
-        # Tefia
-        "тефиа": "Tefia",
-        "тефия": "Tefia",
-        "tefia": "Tefia",
-
-        # Sesderma
-        "сесдерма": "Sesderma",
-        "sesderma": "Sesderma",
-
-        # Martinex
-        "мартинекс": "Martinex",
-        "martinex": "Martinex",
-
-        # Biotherme
-        "биотерм": "Biotherm",
-        "biotherm": "Biotherm",
-
-        # Kydra
-        "кюдра": "Kydra",
-        "кудра": "Kydra",
-        "kydra": "Kydra",
-
-        # Arli's Story
-        "арлис": "Arli's Story",
-        "арли": "Arli's Story",
-        "arli's story": "Arli's Story",
-
-        # Favori
-        "фавори": "Favori",
-        "favori": "Favori",
-
-        # Gernetic
-        "жернетик": "Gernetic",
-        "гернетик": "Gernetic",
-        "gernetic": "Gernetic",
-
-        # Gigi
-        "гиги": "Gigi",
-        "gigi": "Gigi",
-
-        # Hair Sekta
-        "хэир секта": "Hair Sekta",
-        "хейр секта": "Hair Sekta",
-        "hair sekta": "Hair Sekta",
-
-        # Inspira
-        "инспира": "Inspira",
-        "inspira": "Inspira",
-
-        # Janssen
-        "янссен": "Janssen",
-        "janssen": "Janssen",
-
-        # Jufora
-        "юфора": "Jufora",
-        "jufora": "Jufora",
-
-        # Klapp
-        "клапп": "Klapp",
-        "klapp": "Klapp",
-
-        # Nook
-        "нук": "Nook",
-        "nook": "Nook",
-
-        # Oribe (уже есть)
-        # Paul Mitchell
-        "пауль митчелл": "Paul Mitchell",
-        "paul mitchell": "Paul Mitchell",
-
-        # Peach Peel
-        "пич пил": "Peach Peel",
-        "peach peel": "Peach Peel",
-
-        # Princess
-        "принцесс": "Princess",
-        "princess": "Princess",
-
-        # PRX-T33
-        "прх": "PRX-T33",
-        "prx": "PRX-T33",
-        "prx-t33": "PRX-T33",
-
-        # QTFILL
-        "кутфилл": "QTFILL",
-        "qtfill": "QTFILL",
-
-        # R+Co
-        "р+co": "R+Co",
-        "р+ко": "R+Co",
-        "r+co": "R+Co",
-
-        # Realook
-        "реалук": "Realook",
-        "realook": "Realook",
-
-        # Repart
-        "репарт": "Repart",
-        "repart": "Repart",
-
-        # Revi
-        "реви": "Revi",
-        "revi": "Revi",
-
-        # Sofiderm
-        "софидерм": "Sofiderm",
-        "sofiderm": "Sofiderm",
-
-        # Stylage
-        "стиляж": "Stylage",
-        "stylage": "Stylage",
-
-        # Teoxane
-        "теоксан": "Teoxane",
-        "teoxane": "Teoxane",
-
-        # You Be Lab
-        "ю би лаб": "You Be Lab",
-        "you be lab": "You Be Lab",
-
-        # ZQ-II
-        "зкью": "ZQ-II",
-        "zq-ii": "ZQ-II",
-    }
-    for ru, en in brand_map.items():
+    # Fallback для часто встречающихся брендов
+    for ru, en in BRAND_MAPPING.items():
         if ru in text_lower:
             return en
+    # Промпт для LLM
     prompt = f"""Извлеки название бренда из запроса. Если бренд не упомянут, верни 'none'.
 Примеры:
-покажи акции только по матрикс -> Matrix
-акции карал -> Kaaral
-скидки на Loreal -> L'Oreal
-покажи акции орибе -> Oribe
-акции кутем -> Qtem
-покажи акции матрикс -> Matrix
-акции виши -> Vichy
-скидки ла рош позе -> La Roche Posay
-акции кевин мерфи -> Kevin Murphy
-покажи акции -> none
+Запрос: покажи акции только по матрикс
+Ответ: Matrix
+Запрос: акции карал
+Ответ: Kaaral
+Запрос: скидки на Loreal
+Ответ: L'Oreal
+Запрос: покажи акции орибе
+Ответ: Oribe
+Запрос: акции кутем
+Ответ: Qtem
+Запрос: покажи акции матрикс
+Ответ: Matrix
+Запрос: покажи акции -> none
 Запрос: {text}
 Ответ:"""
     try:
         response = llm(prompt, max_tokens=20, stop=["\n"], temperature=0.0)
         raw = response["choices"][0]["text"].strip()
-        logger.info(f"LLM ответ для бренда (raw): '{raw}'")
         if raw.lower() == "none" or not raw:
             return None
         raw = raw.rstrip('.,;:!?')
