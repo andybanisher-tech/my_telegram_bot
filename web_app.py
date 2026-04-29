@@ -160,17 +160,21 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             });
         }
 
-        function trackClick(promoId, promoName, originalUrl) {
+        function trackClick(element) {
+            var promoId = element.getAttribute('data-promo-id');
+            var promoName = element.getAttribute('data-promo-name');
+            var originalUrl = element.getAttribute('data-url');
+            if (!originalUrl) return;
             fetch('/click', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     promo_id: promoId,
                     promo_name: promoName,
-                    user_id: tg.initDataUnsafe?.user?.id
+                    user_id: tg.initDataUnsafe?.user?.id,
+                    url: originalUrl
                 })
             }).catch(e => console.error('Click log error:', e));
-            // Открываем ссылку во внешнем браузере
             tg.openLink(originalUrl);
             return false;
         }
@@ -235,7 +239,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                             ${promo.image ? `<div class="promo-image"><img src="${escapeHtml(promo.image)}" alt="Превью акции"></div>` : ''}
                             ${promo.description ? `<div class="promo-description">${escapeHtml(promo.description)}</div>` : ''}
                             ${promo.details_missing ? `<div class="warning-text">ВНИМАНИЕ: Для этой акции нет описания на сайте! Требуется настройка.</div>` : ''}
-                            ${promoLink ? `<a href="#" onclick="trackClick('${escapeHtml(promo.id)}', '${escapeHtml(promo.name)}', '${escapeHtml(promoLink)}'); return false;" class="promo-button">Подробнее на сайте</a>` : ''}
+                            ${promoLink ? `<a href="#" data-promo-id="${escapeHtml(promo.id)}" data-promo-name="${escapeHtml(promo.name)}" data-url="${escapeHtml(promoLink)}" onclick="trackClick(this); return false;" class="promo-button">Подробнее на сайте</a>` : ''}
                         </div>
                         `;
                     });
