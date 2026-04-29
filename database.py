@@ -47,13 +47,6 @@ def init_db():
     ''')
 
     cur.execute('''
-        CREATE TABLE IF NOT EXISTS managers (
-            user_id INTEGER PRIMARY KEY,
-            name TEXT
-        )
-    ''')
-
-    cur.execute('''
         CREATE TABLE IF NOT EXISTS user_companies (
             user_id INTEGER,
             company_code TEXT,
@@ -65,17 +58,24 @@ def init_db():
     ''')
 
     cur.execute('''
-        CREATE TABLE IF NOT EXISTS stats (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            partner_code TEXT,
-            clicks INTEGER DEFAULT 0,
-            unique_users INTEGER DEFAULT 0,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(partner_code)
+        CREATE TABLE IF NOT EXISTS managers (
+            user_id INTEGER PRIMARY KEY,
+            name TEXT
         )
     ''')
 
-    # Добавляем категории по умолчанию только если таблица пуста
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS promo_clicks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            promo_id TEXT,
+            promo_name TEXT,
+            clicked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE SET NULL
+        )
+    ''')
+
+    # Добавляем категории по умолчанию если таблица пуста
     cur.execute("SELECT COUNT(*) FROM categories")
     count = cur.fetchone()[0]
     if count == 0:
@@ -93,52 +93,6 @@ def init_db():
     conn.close()
     logger.info("База данных инициализирована")
 
-# ---------- Функции для статистики ----------
-def increment_user_counter():
-    """Увеличивает счётчик уникальных пользователей (при каждом новом пользователе)."""
-    conn = sqlite3.connect(DB_NAME)
-    cur = conn.cursor()
-    cur.execute("INSERT OR IGNORE INTO stats (partner_code, unique_users) VALUES ('total', 0)")
-    cur.execute("UPDATE stats SET unique_users = unique_users + 1 WHERE partner_code = 'total'")
-    conn.commit()
-    conn.close()
-
-def increment_click_counter(partner_code: str):
-    """Увеличивает счётчик кликов по ссылкам акций для конкретного партнёра."""
-    conn = sqlite3.connect(DB_NAME)
-    cur = conn.cursor()
-    cur.execute("INSERT OR IGNORE INTO stats (partner_code, clicks) VALUES (?, 0)", (partner_code,))
-    cur.execute("UPDATE stats SET clicks = clicks + 1 WHERE partner_code = ?", (partner_code,))
-    conn.commit()
-    conn.close()
-
-def get_stats():
-    """Возвращает количество уникальных пользователей и кликов по каждому партнёру."""
-    conn = sqlite3.connect(DB_NAME)
-    cur = conn.cursor()
-    cur.execute("SELECT partner_code, clicks, unique_users FROM stats ORDER BY partner_code")
-    rows = cur.fetchall()
-    conn.close()
-    result = {}
-    total_users = 0
-    for row in rows:
-        if row[0] == 'total':
-            total_users = row[2] if row[2] else 0
-        else:
-            result[row[0]] = {'clicks': row[1] or 0, 'users': row[2] or 0}
-    return {'total_users': total_users, 'partners': result}
-
-def add_user(user_id, username, first_name):
-    conn = sqlite3.connect(DB_NAME)
-    cur = conn.cursor()
-    cur.execute('INSERT OR IGNORE INTO users (user_id, username, first_name) VALUES (?, ?, ?)',
-                (user_id, username, first_name))
-    if cur.rowcount > 0:
-        increment_user_counter()  # новый пользователь
-    conn.commit()
-    conn.close()
-
-# ---------- Остальные функции (без изменений) ----------
 def get_categories():
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
@@ -204,7 +158,16 @@ def delete_category(name):
         conn.close()
     return success
 
-# Функции для users и телефонов
+def add_user(user_id, username, first_name):
+    conn = sqlite3.connect(DB_NAME)
+    cur = conn.cursor()
+    cur.execute('''
+        INSERT OR IGNORE INTO users (user_id, username, first_name)
+        VALUES (?, ?, ?)
+    ''', (user_id, username, first_name))
+    conn.commit()
+    conn.close()
+
 def get_user_phone(user_id):
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
@@ -235,7 +198,6 @@ def mark_user_verified(user_id):
     conn.commit()
     conn.close()
 
-# Подписки
 def get_user_subscriptions(user_id):
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
@@ -312,7 +274,6 @@ def get_category_subscribers_count():
     conn.close()
     return result
 
-# Администраторы и менеджеры
 def add_admin(user_id, name):
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
@@ -338,6 +299,26 @@ def get_db_admins():
     rows = cur.fetchall()
     conn.close()
     return [{"id": row[0], "name": row[1]} for row in rows]
+
+def save_user_companies(user_id, companies):
+    conn = sqlite3.connect(DB_NAME)
+    cur = conn.cursor()
+    cur.execute('DELETE FROM user_companies WHERE user_id = ?', (user_id,))
+    for comp in companies:
+        cur.execute('''
+            INSERT INTO user_companies (user_id, company_code, company_name)
+            VALUES (?, ?, ?)
+        ''', (user_id, comp['code'], comp['name']))
+    conn.commit()
+    conn.close()
+
+def get_user_companies(user_id):
+    conn = sqlite3.connect(DB_NAME)
+    cur = conn.cursor()
+    cur.execute('SELECT company_code, company_name FROM user_companies WHERE user_id = ?', (user_id,))
+    rows = cur.fetchall()
+    conn.close()
+    return [{"code": row[0], "name": row[1]} for row in rows]
 
 def add_manager(user_id, name):
     conn = sqlite3.connect(DB_NAME)
@@ -365,23 +346,22 @@ def get_db_managers():
     conn.close()
     return [{"id": row[0], "name": row[1]} for row in rows]
 
-# Компании пользователя
-def save_user_companies(user_id, companies):
+def log_promo_click(user_id, promo_id, promo_name):
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
-    cur.execute('DELETE FROM user_companies WHERE user_id = ?', (user_id,))
-    for comp in companies:
-        cur.execute('''
-            INSERT INTO user_companies (user_id, company_code, company_name)
-            VALUES (?, ?, ?)
-        ''', (user_id, comp['code'], comp['name']))
+    cur.execute('''
+        INSERT INTO promo_clicks (user_id, promo_id, promo_name)
+        VALUES (?, ?, ?)
+    ''', (user_id, promo_id, promo_name))
     conn.commit()
     conn.close()
 
-def get_user_companies(user_id):
+def get_stats():
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
-    cur.execute('SELECT company_code, company_name FROM user_companies WHERE user_id = ?', (user_id,))
-    rows = cur.fetchall()
+    cur.execute('SELECT COUNT(*) FROM users')
+    total_users = cur.fetchone()[0]
+    cur.execute('SELECT COUNT(*) FROM promo_clicks')
+    total_clicks = cur.fetchone()[0]
     conn.close()
-    return [{"code": row[0], "name": row[1]} for row in rows]
+    return {"total_users": total_users, "total_clicks": total_clicks}
