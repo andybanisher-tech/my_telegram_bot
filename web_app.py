@@ -30,7 +30,7 @@ HTML_TEMPLATE = """
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
     <title>Акции для вас | Stalker-Co</title>
-    <meta property="og:title" content="� Персональные акции Stalker-Co" />
+    <meta property="og:title" content="🎁 Персональные акции Stalker-Co" />
     <meta property="og:description" content="Акции и специальные предложения, подготовленные специально для вас." />
     <meta property="og:type" content="website" />
     <meta property="og:image" content="https://stalker-co.ru/local/templates/stalker/images/logo.png" />
@@ -104,6 +104,14 @@ HTML_TEMPLATE = """
         .footer { text-align: center; font-size: 12px; color: var(--meta-color); margin-top: 30px; }
         @media (max-width: 480px) { body { padding: 12px; } .promo-card { padding: 16px; } .promo-title { font-size: 18px; } }
     </style>
+</head>
+<body>
+    <div class="container" id="content">
+        <h1 id="main-title">🎁 Акции для вас</h1>
+        <div class="sub" id="sub-title">Персональные предложения</div>
+        <div class="loader">⏳ Загружаем акции...</div>
+    </div>
+    <div class="footer">Stalker-Co — всё для профессионалов</div>
     <script>
         const tg = window.Telegram.WebApp;
         tg.ready();
@@ -140,10 +148,10 @@ HTML_TEMPLATE = """
         }
         if (partnerName) {
             try { partnerName = decodeURIComponent(partnerName); } catch(e) {}
-            document.getElementById('main-title').innerText = `� Акции для ${escapeHtml(partnerName)}`;
+            document.getElementById('main-title').innerText = `🎁 Акции для ${escapeHtml(partnerName)}`;
             document.getElementById('sub-title').innerText = `Персональные предложения (ID: ${escapeHtml(partnerId)})`;
         } else if (allMode) {
-            document.getElementById('main-title').innerText = `� Все акции сайта`;
+            document.getElementById('main-title').innerText = `🎁 Все акции сайта`;
             document.getElementById('sub-title').innerText = `Актуальные предложения`;
         }
 
@@ -156,36 +164,22 @@ HTML_TEMPLATE = """
                 if (data.promotions && data.promotions.length) {
                     let html = `<h1>${escapeHtml(document.getElementById('main-title').innerText)}</h1><div class="sub">${escapeHtml(document.getElementById('sub-title').innerText)}</div>`;
                     data.promotions.forEach(promo => {
-                        const link = promo.link;
-                        // Добавляем обработчик клика по кнопке
-                        const onclickAttr = link ? ` onclick="fetch('/track-click', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({partner_code:'${partnerId}',click:true})});"` : '';
                         html += `
                         <div class="promo-card">
                             <div class="promo-title">${escapeHtml(promo.name)}</div>
                             <div class="promo-meta">
                                 ${promo.mark ? `<span class="brand-badge">${escapeHtml(promo.mark)}</span>` : ''}
-                                ${promo.date_to ? `<span>� до ${escapeHtml(promo.date_to)}</span>` : ''}
+                                ${promo.date_to ? `<span>📅 до ${escapeHtml(promo.date_to)}</span>` : ''}
                             </div>
                             ${promo.image ? `<div class="promo-image"><img src="${escapeHtml(promo.image)}" alt="Превью акции"></div>` : ''}
                             ${promo.description ? `<div class="promo-description">${escapeHtml(promo.description)}</div>` : ''}
-                            ${link ? `<a href="${escapeHtml(link)}" class="promo-button" target="_blank" rel="noopener noreferrer" id="link-${promo.id}">� Подробнее на сайте</a>` : ''}
+                            ${promo.link ? `<a href="${escapeHtml(promo.link)}" class="promo-button" target="_blank" rel="noopener noreferrer">🔗 Подробнее на сайте</a>` : ''}
                         </div>
                         `;
-                        // Добавляем обработчик для клика по ссылке
-                        if (link) {
-                            setTimeout(() => {
-                                const btn = document.getElementById(`link-${promo.id}`);
-                                if (btn) {
-                                    btn.addEventListener('click', (e) => {
-                                        fetch('/track-click', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({partner_code:partnerId,click:true})});
-                                    });
-                                }
-                            }, 100);
-                        }
                     });
                     container.innerHTML = html;
                 } else {
-                    container.innerHTML = `<h1>${escapeHtml(document.getElementById('main-title').innerText)}</h1><div class="sub">${escapeHtml(document.getElementById('sub-title').innerText)}</div><div style="background: var(--card-bg); border-radius: 20px; padding: 40px 20px; text-align: center;">� На данный момент нет активных акций</div><div class="footer">Stalker-Co — всё для профессионалов</div>`;
+                    container.innerHTML = `<h1>${escapeHtml(document.getElementById('main-title').innerText)}</h1><div class="sub">${escapeHtml(document.getElementById('sub-title').innerText)}</div><div style="background: var(--card-bg); border-radius: 20px; padding: 40px 20px; text-align: center;">😔 На данный момент нет активных акций</div><div class="footer">Stalker-Co — всё для профессионалов</div>`;
                 }
             })
             .catch(error => {
@@ -196,7 +190,6 @@ HTML_TEMPLATE = """
 </body>
 </html>
 """
-
 @app.route('/promo/<partner_code>')
 def promo_page(partner_code):
     return render_template_string(HTML_TEMPLATE)
