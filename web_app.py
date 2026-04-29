@@ -37,12 +37,12 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            padding: 20px 12px 40px;
-            transition: background-color 0.2s, color 0.2s;
-        }
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    padding: 20px 12px 40px;
+    transition: background-color 0.2s, color 0.2s;
+}
         body.light {
             --bg-color: #f2f2f7;
             --text-color: #1c1c1e;
