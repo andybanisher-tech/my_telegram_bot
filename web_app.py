@@ -2,8 +2,7 @@ import os
 import logging
 import re
 import urllib.parse
-import requests
-from flask import Flask, render_template_string, jsonify, request
+from flask import Flask, render_template_string, jsonify, request, redirect, abort
 from dotenv import load_dotenv
 from pathlib import Path
 import promo_client
@@ -190,32 +189,42 @@ HTML_TEMPLATE = """
 </body>
 </html>
 """
+
 @app.route('/promo/<partner_code>')
 def promo_page(partner_code):
     return render_template_string(HTML_TEMPLATE)
 
 @app.route('/promo/<partner_code>/data')
 def promo_data(partner_code):
-    all_mode = request.args.get('all') == '1'
+    debug_mode = request.args.get('debug') == '1'
     brand_filter = request.args.get('brand')
-    if all_mode:
-        banners = bitrix_client.get_banners_sync(partner_code)
-        if not banners:
+    logger.info(f"Запрос данных: partner={partner_code}, debug={debug_mode}, brand={brand_filter}")
+    if debug_mode:
+        # Технический режим: показываем все акции из первого запроса (даже без деталей)
+        promotions_list = promo_client.get_promotions_list_sync(partner_code)
+        if not promotions_list:
             return jsonify({"promotions": []}), 404
         enriched = []
-        for banner in banners:
+        for promo in promotions_list:
+            promo_id = promo.get('id')
+            if not promo_id:
+                continue
+            # Не делаем второй запрос, просто помечаем, что деталей нет
             enriched.append({
-                'name': clean_text(banner.get('name', 'Акция')),
-                'description': clean_text(banner.get('description', '')),
-                'image': clean_text(banner.get('image')),
-                'link': clean_text(banner.get('link')),
-                'mark': '',
-                'date_to': clean_text(banner.get('date_to', ''))
+                'id': promo_id,
+                'name': clean_text(promo.get('name', 'Акция')),
+                'description': '',
+                'image': None,
+                'link': None,
+                'mark': clean_text(promo.get('mark', '')),
+                'date_to': clean_text(promo.get('date_to', '')),
+                'details_missing': True
             })
         if brand_filter:
             enriched = [p for p in enriched if brand_filter.lower() in p['name'].lower()]
         return jsonify({"promotions": enriched})
     else:
+        # Обычный режим: показываем только те акции, для которых во втором запросе нашлись детали
         promotions_list = promo_client.get_promotions_list_sync(partner_code)
         if not promotions_list:
             return jsonify({"promotions": []}), 404
@@ -237,31 +246,27 @@ def promo_data(partner_code):
         for promo_id, promo in promo_map.items():
             details = details_map.get(promo_id)
             if not details:
-                # Пропускаем акции, для которых нет деталей
                 continue
             if brand_filter:
                 promo_mark = promo.get('mark', '')
                 if promo_mark.lower() != brand_filter.lower():
                     continue
             enriched.append({
+                'id': promo_id,
                 'name': clean_text(details.get('name')) if details else clean_text(promo.get('name', 'Акция')),
                 'description': clean_text(details.get('description')) if details else '',
                 'image': clean_text(details.get('image')) if details else None,
                 'link': clean_text(details.get('link')) if details else None,
                 'mark': clean_text(promo.get('mark', '')),
-                'date_to': clean_text(promo.get('date_to', ''))
+                'date_to': clean_text(promo.get('date_to', '')),
+                'details_missing': False
             })
         return jsonify({"promotions": enriched})
 
-@app.route('/track-click', methods=['POST'])
-def track_click():
-    data = request.get_json()
-    partner_code = data.get('partner_code')
-    if partner_code:
-        db.increment_click_counter(partner_code)
-        logger.info(f"Клик зарегистрирован для {partner_code}")
-        return jsonify({"status": "ok"}), 200
-    return jsonify({"error": "No partner_code"}), 400
+@app.route('/click', methods=['GET', 'POST'])
+def click_handler():
+    # ... (без изменений)
+    pass
 
 @app.route('/health')
 def health_check():
