@@ -295,83 +295,6 @@ def promo_data(partner_code):
 
     logger.info(f"Запрос данных: partner={partner_code}, debug={debug_mode}, all={all_mode}, brand={brand_filter}")
 
-    # 1. Режим all=1: показываем все акции из второго запроса (banners) без фильтрации
-    if all_mode:
-        banners = bitrix_client.get_banners_sync(partner_code)
-        if not banners:
-            return jsonify({"promotions": []}), 404
-        enriched = []
-        for banner in banners:
-            enriched.append({
-                'id': banner.get('id'),
-                'name': clean_text(banner.get('name', 'Акция')),
-                'description': clean_text(banner.get('description', '')),
-                'image': clean_text(banner.get('image')),
-                'link': clean_text(banner.get('link')),
-                'mark': '',
-                'date_to': clean_text(banner.get('date_to', '')),
-                'details_missing': False
-            })
-        if brand_filter:
-            enriched = [p for p in enriched if brand_filter.lower() in p['name'].lower()]
-        return jsonify({"promotions": enriched})
-
-    # 2. Обычный режим: персональные акции, только те, для которых есть детали (чтобы не показывать "пустышки")
-    promotions_list = promo_client.get_promotions_list_sync(partner_code)
-    if not promotions_list:
-        return jsonify({"promotions": []}), 404
-
-    promo_ids = []
-    for promo in promotions_list:
-        if promo.get('id'):
-            promo_ids.append(promo['id'])
-
-    if not promo_ids:
-        return jsonify({"promotions": []}), 404
-
-    details_map = promo_client.get_promotion_details_batch_sync(promo_ids)
-
-    enriched = []
-    for promo in promotions_list:
-        promo_id = promo.get('id')
-        details = details_map.get(promo_id)
-        if not details:
-            continue  # пропускаем акции без деталей
-        if brand_filter:
-            promo_mark = promo.get('mark', '')
-            if promo_mark.lower() != brand_filter.lower():
-                continue
-        enriched.append({
-            'id': promo_id,
-            'name': clean_text(details.get('name')) if details else clean_text(promo.get('name', 'Акция')),
-            'description': clean_text(details.get('description')) if details else '',
-            'image': clean_text(details.get('image')) if details else None,
-            'link': clean_text(details.get('link')) if details else None,
-            'mark': clean_text(promo.get('mark', '')),
-            'date_to': clean_text(promo.get('date_to', '')),
-            'details_missing': False
-        })
-    return jsonify({"promotions": enriched})
-
-    # 3. Технический режим debug=1: показываем ВСЕ акции из первого запроса, но помечаем те, для которых нет деталей
-    # (этот блок недостижим из-за return выше, но мы его перенесём выше по приоритету)
-    # На самом деле, debug_mode должен обрабатываться раньше all_mode? Лучше так:
-    # приоритет: debug → all → обычный.
-    # Поэтому я перепишу порядок.
-
-# Поскольку я переписываю функцию, нужно правильно расставить приоритеты.
-# Полностью перепишу функцию promo_data с правильным порядком.
-
-# Вот окончательная версия функции promo_data (вставьте её вместо предыдущей):
-
-@app.route('/promo/<partner_code>/data')
-def promo_data(partner_code):
-    debug_mode = request.args.get('debug') == '1'
-    all_mode = request.args.get('all') == '1'
-    brand_filter = request.args.get('brand')
-
-    logger.info(f"Запрос данных: partner={partner_code}, debug={debug_mode}, all={all_mode}, brand={brand_filter}")
-
     # 1. Технический режим: показываем все акции из первого запроса, помечая отсутствие деталей
     if debug_mode:
         promotions_list = promo_client.get_promotions_list_sync(partner_code)
@@ -405,7 +328,7 @@ def promo_data(partner_code):
             enriched = [p for p in enriched if brand_filter.lower() in p['name'].lower()]
         return jsonify({"promotions": enriched})
 
-    # 2. Режим all=1: показываем все акции из второго запроса
+    # 2. Режим all=1: показываем все акции из второго запроса (banners)
     if all_mode:
         banners = bitrix_client.get_banners_sync(partner_code)
         if not banners:
@@ -465,4 +388,9 @@ def promo_data(partner_code):
         })
     return jsonify({"promotions": enriched})
 
-# Не забудьте удалить предыдущее определение функции promo_data, оставив только это.
+@app.route('/health')
+def health_check():
+    return "OK", 200
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=8000)
