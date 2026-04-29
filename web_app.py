@@ -169,9 +169,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     promo_name: promoName,
                     user_id: tg.initDataUnsafe?.user?.id
                 })
-            }).finally(() => {
-                window.location.href = originalUrl;
-            });
+            }).catch(e => console.error('Click log error:', e));
+            // Открываем ссылку во внешнем браузере
+            tg.openLink(originalUrl);
             return false;
         }
 
@@ -222,7 +222,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     let html = `<h1>${escapeHtml(pageTitle)}</h1><div class="sub">${escapeHtml(pageSubtitle)}</div>`;
                     data.promotions.forEach(promo => {
                         const cardClass = promo.details_missing ? 'promo-card warning' : 'promo-card';
-                        const promoLink = promo.link && !promo.details_missing ? `/click?promo_id=${encodeURIComponent(promo.id)}&promo_name=${encodeURIComponent(promo.name)}&url=${encodeURIComponent(promo.link)}` : null;
+                        const promoLink = promo.link && !promo.details_missing ? promo.link : null;
                         const promoIdHtml = debugMode ? `<span class="promo-id">ID: ${escapeHtml(promo.id)}</span>` : '';
                         html += `
                         <div class="${cardClass}">
@@ -235,7 +235,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                             ${promo.image ? `<div class="promo-image"><img src="${escapeHtml(promo.image)}" alt="Превью акции"></div>` : ''}
                             ${promo.description ? `<div class="promo-description">${escapeHtml(promo.description)}</div>` : ''}
                             ${promo.details_missing ? `<div class="warning-text">ВНИМАНИЕ: Для этой акции нет описания на сайте! Требуется настройка.</div>` : ''}
-                            ${promoLink ? `<a href="#" onclick="trackClick('${escapeHtml(promo.id)}', '${escapeHtml(promo.name)}', '${escapeHtml(promo.link)}'); return false;" class="promo-button">Подробнее на сайте</a>` : ''}
+                            ${promoLink ? `<a href="#" onclick="trackClick('${escapeHtml(promo.id)}', '${escapeHtml(promo.name)}', '${escapeHtml(promoLink)}'); return false;" class="promo-button">Подробнее на сайте</a>` : ''}
                         </div>
                         `;
                     });
