@@ -29,7 +29,7 @@ HTML_TEMPLATE = """
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
     <title>Акции для вас | Stalker-Co</title>
-    <meta property="og:title" content="🎁 Персональные акции Stalker-Co" />
+    <meta property="og:title" content="� Персональные акции Stalker-Co" />
     <meta property="og:description" content="Акции и специальные предложения, подготовленные специально для вас." />
     <meta property="og:type" content="website" />
     <meta property="og:image" content="https://stalker-co.ru/local/templates/stalker/images/logo.png" />
@@ -100,13 +100,23 @@ HTML_TEMPLATE = """
             transition: background 0.2s;
         }
         .promo-button:hover { background-color: var(--button-hover); }
+        .warning-badge {
+            display: inline-block;
+            background-color: #ffcc00;
+            color: #000;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-weight: 500;
+            font-size: 12px;
+            margin-left: 8px;
+        }
         .footer { text-align: center; font-size: 12px; color: var(--meta-color); margin-top: 30px; }
         @media (max-width: 480px) { body { padding: 12px; } .promo-card { padding: 16px; } .promo-title { font-size: 18px; } }
     </style>
 </head>
 <body>
     <div class="container" id="content">
-        <h1 id="main-title">🎁 Акции для вас</h1>
+        <h1 id="main-title">� Акции для вас</h1>
         <div class="sub" id="sub-title">Персональные предложения</div>
         <div class="loader">⏳ Загружаем акции...</div>
     </div>
@@ -137,9 +147,26 @@ HTML_TEMPLATE = """
             });
         }
 
+        function trackClick(promoId, promoName, originalUrl) {
+            fetch('/click', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    promo_id: promoId,
+                    promo_name: promoName,
+                    user_id: tg.initDataUnsafe?.user?.id
+                })
+            }).then(() => {
+                window.location.href = originalUrl;
+            }).catch(() => {
+                window.location.href = originalUrl;
+            });
+            return false;
+        }
+
         const urlParams = new URLSearchParams(window.location.search);
         const brandFilter = urlParams.get('brand');
-        const allMode = urlParams.get('all') === '1';
+        const debugMode = urlParams.get('debug') === '1';
         let partnerName = urlParams.get('name');
         let partnerId = window.location.pathname.split('/').pop();
         if (partnerId) {
@@ -147,15 +174,18 @@ HTML_TEMPLATE = """
         }
         if (partnerName) {
             try { partnerName = decodeURIComponent(partnerName); } catch(e) {}
-            document.getElementById('main-title').innerText = `🎁 Акции для ${escapeHtml(partnerName)}`;
-            document.getElementById('sub-title').innerText = `Персональные предложения (ID: ${escapeHtml(partnerId)})`;
-        } else if (allMode) {
-            document.getElementById('main-title').innerText = `🎁 Все акции сайта`;
-            document.getElementById('sub-title').innerText = `Актуальные предложения`;
+            document.getElementById('main-title').innerText = `� Акции для ${escapeHtml(partnerName)}`;
+            document.getElementById('sub-title').innerText = `Персональные предложения (ID: ${escapeHtml(partnerId)})` + (debugMode ? ' [Технический режим]' : '');
+        } else if (debugMode) {
+            document.getElementById('main-title').innerText = `� Акции (технический режим)`;
+            document.getElementById('sub-title').innerText = `Все акции из 1С с пометкой`;
+        } else {
+            document.getElementById('main-title').innerText = `� Акции для вас`;
+            document.getElementById('sub-title').innerText = `Персональные предложения`;
         }
 
         let dataUrl = window.location.pathname + '/data' + (brandFilter ? `?brand=${brandFilter}` : '');
-        if (allMode) dataUrl += (brandFilter ? '&' : '?') + 'all=1';
+        if (debugMode) dataUrl += (brandFilter ? '&' : '?') + 'debug=1';
         fetch(dataUrl)
             .then(response => response.json())
             .then(data => {
@@ -163,22 +193,26 @@ HTML_TEMPLATE = """
                 if (data.promotions && data.promotions.length) {
                     let html = `<h1>${escapeHtml(document.getElementById('main-title').innerText)}</h1><div class="sub">${escapeHtml(document.getElementById('sub-title').innerText)}</div>`;
                     data.promotions.forEach(promo => {
+                        const promoLink = promo.link ? `/click?promo_id=${encodeURIComponent(promo.id)}&promo_name=${encodeURIComponent(promo.name)}&url=${encodeURIComponent(promo.link)}` : null;
                         html += `
                         <div class="promo-card">
-                            <div class="promo-title">${escapeHtml(promo.name)}</div>
+                            <div class="promo-title">
+                                ${escapeHtml(promo.name)}
+                                ${promo.details_missing ? '<span class="warning-badge">⚠️ Нет деталей на сайте</span>' : ''}
+                            </div>
                             <div class="promo-meta">
                                 ${promo.mark ? `<span class="brand-badge">${escapeHtml(promo.mark)}</span>` : ''}
-                                ${promo.date_to ? `<span>📅 до ${escapeHtml(promo.date_to)}</span>` : ''}
+                                ${promo.date_to ? `<span>� до ${escapeHtml(promo.date_to)}</span>` : ''}
                             </div>
                             ${promo.image ? `<div class="promo-image"><img src="${escapeHtml(promo.image)}" alt="Превью акции"></div>` : ''}
                             ${promo.description ? `<div class="promo-description">${escapeHtml(promo.description)}</div>` : ''}
-                            ${promo.link ? `<a href="${escapeHtml(promo.link)}" class="promo-button" target="_blank" rel="noopener noreferrer">🔗 Подробнее на сайте</a>` : ''}
+                            ${promoLink ? `<a href="#" onclick="trackClick('${escapeHtml(promo.id)}', '${escapeHtml(promo.name)}', '${escapeHtml(promo.link)}'); return false;" class="promo-button">� Подробнее на сайте</a>` : ''}
                         </div>
                         `;
                     });
                     container.innerHTML = html;
                 } else {
-                    container.innerHTML = `<h1>${escapeHtml(document.getElementById('main-title').innerText)}</h1><div class="sub">${escapeHtml(document.getElementById('sub-title').innerText)}</div><div style="background: var(--card-bg); border-radius: 20px; padding: 40px 20px; text-align: center;">😔 На данный момент нет активных акций</div><div class="footer">Stalker-Co — всё для профессионалов</div>`;
+                    container.innerHTML = `<h1>${escapeHtml(document.getElementById('main-title').innerText)}</h1><div class="sub">${escapeHtml(document.getElementById('sub-title').innerText)}</div><div style="background: var(--card-bg); border-radius: 20px; padding: 40px 20px; text-align: center;">� На данный момент нет активных акций</div><div class="footer">Stalker-Co — всё для профессионалов</div>`;
                 }
             })
             .catch(error => {
