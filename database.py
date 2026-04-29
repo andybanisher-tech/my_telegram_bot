@@ -7,7 +7,6 @@ logger = logging.getLogger(__name__)
 DB_NAME = "news_bot.db"
 
 def init_db():
-    """Создаёт таблицы и добавляет категории по умолчанию только если таблица пуста."""
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
 
@@ -48,6 +47,13 @@ def init_db():
     ''')
 
     cur.execute('''
+        CREATE TABLE IF NOT EXISTS managers (
+            user_id INTEGER PRIMARY KEY,
+            name TEXT
+        )
+    ''')
+
+    cur.execute('''
         CREATE TABLE IF NOT EXISTS user_companies (
             user_id INTEGER,
             company_code TEXT,
@@ -57,12 +63,17 @@ def init_db():
             FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
         )
     ''')
+
     cur.execute('''
-    CREATE TABLE IF NOT EXISTS managers (
-        user_id INTEGER PRIMARY KEY,
-        name TEXT
-    )
-''')
+        CREATE TABLE IF NOT EXISTS stats (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            partner_code TEXT,
+            clicks INTEGER DEFAULT 0,
+            unique_users INTEGER DEFAULT 0,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(partner_code)
+        )
+    ''')
 
     # Добавляем категории по умолчанию только если таблица пуста
     cur.execute("SELECT COUNT(*) FROM categories")
@@ -82,6 +93,52 @@ def init_db():
     conn.close()
     logger.info("База данных инициализирована")
 
+# ---------- Функции для статистики ----------
+def increment_user_counter():
+    """Увеличивает счётчик уникальных пользователей (при каждом новом пользователе)."""
+    conn = sqlite3.connect(DB_NAME)
+    cur = conn.cursor()
+    cur.execute("INSERT OR IGNORE INTO stats (partner_code, unique_users) VALUES ('total', 0)")
+    cur.execute("UPDATE stats SET unique_users = unique_users + 1 WHERE partner_code = 'total'")
+    conn.commit()
+    conn.close()
+
+def increment_click_counter(partner_code: str):
+    """Увеличивает счётчик кликов по ссылкам акций для конкретного партнёра."""
+    conn = sqlite3.connect(DB_NAME)
+    cur = conn.cursor()
+    cur.execute("INSERT OR IGNORE INTO stats (partner_code, clicks) VALUES (?, 0)", (partner_code,))
+    cur.execute("UPDATE stats SET clicks = clicks + 1 WHERE partner_code = ?", (partner_code,))
+    conn.commit()
+    conn.close()
+
+def get_stats():
+    """Возвращает количество уникальных пользователей и кликов по каждому партнёру."""
+    conn = sqlite3.connect(DB_NAME)
+    cur = conn.cursor()
+    cur.execute("SELECT partner_code, clicks, unique_users FROM stats ORDER BY partner_code")
+    rows = cur.fetchall()
+    conn.close()
+    result = {}
+    total_users = 0
+    for row in rows:
+        if row[0] == 'total':
+            total_users = row[2] if row[2] else 0
+        else:
+            result[row[0]] = {'clicks': row[1] or 0, 'users': row[2] or 0}
+    return {'total_users': total_users, 'partners': result}
+
+def add_user(user_id, username, first_name):
+    conn = sqlite3.connect(DB_NAME)
+    cur = conn.cursor()
+    cur.execute('INSERT OR IGNORE INTO users (user_id, username, first_name) VALUES (?, ?, ?)',
+                (user_id, username, first_name))
+    if cur.rowcount > 0:
+        increment_user_counter()  # новый пользователь
+    conn.commit()
+    conn.close()
+
+# ---------- Остальные функции (без изменений) ----------
 def get_categories():
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
@@ -147,16 +204,7 @@ def delete_category(name):
         conn.close()
     return success
 
-def add_user(user_id, username, first_name):
-    conn = sqlite3.connect(DB_NAME)
-    cur = conn.cursor()
-    cur.execute('''
-        INSERT OR IGNORE INTO users (user_id, username, first_name)
-        VALUES (?, ?, ?)
-    ''', (user_id, username, first_name))
-    conn.commit()
-    conn.close()
-
+# Функции для users и телефонов
 def get_user_phone(user_id):
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
@@ -187,6 +235,7 @@ def mark_user_verified(user_id):
     conn.commit()
     conn.close()
 
+# Подписки
 def get_user_subscriptions(user_id):
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
@@ -263,6 +312,7 @@ def get_category_subscribers_count():
     conn.close()
     return result
 
+# Администраторы и менеджеры
 def add_admin(user_id, name):
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
@@ -289,6 +339,33 @@ def get_db_admins():
     conn.close()
     return [{"id": row[0], "name": row[1]} for row in rows]
 
+def add_manager(user_id, name):
+    conn = sqlite3.connect(DB_NAME)
+    cur = conn.cursor()
+    try:
+        cur.execute('INSERT OR REPLACE INTO managers (user_id, name) VALUES (?, ?)', (user_id, name))
+        conn.commit()
+    except Exception as e:
+        logger.error(f"Ошибка добавления менеджера: {e}")
+    finally:
+        conn.close()
+
+def remove_manager(user_id):
+    conn = sqlite3.connect(DB_NAME)
+    cur = conn.cursor()
+    cur.execute('DELETE FROM managers WHERE user_id = ?', (user_id,))
+    conn.commit()
+    conn.close()
+
+def get_db_managers():
+    conn = sqlite3.connect(DB_NAME)
+    cur = conn.cursor()
+    cur.execute('SELECT user_id, name FROM managers')
+    rows = cur.fetchall()
+    conn.close()
+    return [{"id": row[0], "name": row[1]} for row in rows]
+
+# Компании пользователя
 def save_user_companies(user_id, companies):
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
@@ -308,32 +385,3 @@ def get_user_companies(user_id):
     rows = cur.fetchall()
     conn.close()
     return [{"code": row[0], "name": row[1]} for row in rows]
-
-def add_manager(user_id, name):
-    """Добавляет пользователя в список менеджеров с указанным именем."""
-    conn = sqlite3.connect(DB_NAME)
-    cur = conn.cursor()
-    try:
-        cur.execute('INSERT OR REPLACE INTO managers (user_id, name) VALUES (?, ?)', (user_id, name))
-        conn.commit()
-    except Exception as e:
-        logger.error(f"Ошибка добавления менеджера: {e}")
-    finally:
-        conn.close()
-
-def remove_manager(user_id):
-    """Удаляет пользователя из списка менеджеров."""
-    conn = sqlite3.connect(DB_NAME)
-    cur = conn.cursor()
-    cur.execute('DELETE FROM managers WHERE user_id = ?', (user_id,))
-    conn.commit()
-    conn.close()
-
-def get_db_managers():
-    """Возвращает список словарей с id и именем менеджеров из БД."""
-    conn = sqlite3.connect(DB_NAME)
-    cur = conn.cursor()
-    cur.execute('SELECT user_id, name FROM managers')
-    rows = cur.fetchall()
-    conn.close()
-    return [{"id": row[0], "name": row[1]} for row in rows]

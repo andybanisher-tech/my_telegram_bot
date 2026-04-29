@@ -10,5 +10,6 @@ from .admin import news as admin_news
 from .admin import categories as admin_categories
 from .admin import admins as admin_admins
 from .admin import stats as admin_stats
+from .admin import stats_users as admin_stats_users  # добавлено
 from .admin import managers as admin_managers
 from .admin import set_bitrix_key as admin_set_bitrix_key

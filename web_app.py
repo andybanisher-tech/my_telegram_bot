@@ -2,11 +2,13 @@ import os
 import logging
 import re
 import urllib.parse
+import requests
 from flask import Flask, render_template_string, jsonify, request
 from dotenv import load_dotenv
 from pathlib import Path
 import promo_client
 import bitrix_client
+import database as db
 
 env_path = Path(__file__).parent / '.env'
 load_dotenv(dotenv_path=env_path)
@@ -28,7 +30,7 @@ HTML_TEMPLATE = """
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
     <title>Акции для вас | Stalker-Co</title>
-    <meta property="og:title" content="🎁 Персональные акции Stalker-Co" />
+    <meta property="og:title" content="� Персональные акции Stalker-Co" />
     <meta property="og:description" content="Акции и специальные предложения, подготовленные специально для вас." />
     <meta property="og:type" content="website" />
     <meta property="og:image" content="https://stalker-co.ru/local/templates/stalker/images/logo.png" />
@@ -102,14 +104,6 @@ HTML_TEMPLATE = """
         .footer { text-align: center; font-size: 12px; color: var(--meta-color); margin-top: 30px; }
         @media (max-width: 480px) { body { padding: 12px; } .promo-card { padding: 16px; } .promo-title { font-size: 18px; } }
     </style>
-</head>
-<body>
-    <div class="container" id="content">
-        <h1 id="main-title">🎁 Акции для вас</h1>
-        <div class="sub" id="sub-title">Персональные предложения</div>
-        <div class="loader">⏳ Загружаем акции...</div>
-    </div>
-    <div class="footer">Stalker-Co — всё для профессионалов</div>
     <script>
         const tg = window.Telegram.WebApp;
         tg.ready();
@@ -146,10 +140,10 @@ HTML_TEMPLATE = """
         }
         if (partnerName) {
             try { partnerName = decodeURIComponent(partnerName); } catch(e) {}
-            document.getElementById('main-title').innerText = `🎁 Акции для ${escapeHtml(partnerName)}`;
+            document.getElementById('main-title').innerText = `� Акции для ${escapeHtml(partnerName)}`;
             document.getElementById('sub-title').innerText = `Персональные предложения (ID: ${escapeHtml(partnerId)})`;
         } else if (allMode) {
-            document.getElementById('main-title').innerText = `🎁 Все акции сайта`;
+            document.getElementById('main-title').innerText = `� Все акции сайта`;
             document.getElementById('sub-title').innerText = `Актуальные предложения`;
         }
 
@@ -162,22 +156,36 @@ HTML_TEMPLATE = """
                 if (data.promotions && data.promotions.length) {
                     let html = `<h1>${escapeHtml(document.getElementById('main-title').innerText)}</h1><div class="sub">${escapeHtml(document.getElementById('sub-title').innerText)}</div>`;
                     data.promotions.forEach(promo => {
+                        const link = promo.link;
+                        // Добавляем обработчик клика по кнопке
+                        const onclickAttr = link ? ` onclick="fetch('/track-click', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({partner_code:'${partnerId}',click:true})});"` : '';
                         html += `
                         <div class="promo-card">
                             <div class="promo-title">${escapeHtml(promo.name)}</div>
                             <div class="promo-meta">
                                 ${promo.mark ? `<span class="brand-badge">${escapeHtml(promo.mark)}</span>` : ''}
-                                ${promo.date_to ? `<span>📅 до ${escapeHtml(promo.date_to)}</span>` : ''}
+                                ${promo.date_to ? `<span>� до ${escapeHtml(promo.date_to)}</span>` : ''}
                             </div>
                             ${promo.image ? `<div class="promo-image"><img src="${escapeHtml(promo.image)}" alt="Превью акции"></div>` : ''}
                             ${promo.description ? `<div class="promo-description">${escapeHtml(promo.description)}</div>` : ''}
-                            ${promo.link ? `<a href="${escapeHtml(promo.link)}" class="promo-button" target="_blank" rel="noopener noreferrer">🔗 Подробнее на сайте</a>` : ''}
+                            ${link ? `<a href="${escapeHtml(link)}" class="promo-button" target="_blank" rel="noopener noreferrer" id="link-${promo.id}">� Подробнее на сайте</a>` : ''}
                         </div>
                         `;
+                        // Добавляем обработчик для клика по ссылке
+                        if (link) {
+                            setTimeout(() => {
+                                const btn = document.getElementById(`link-${promo.id}`);
+                                if (btn) {
+                                    btn.addEventListener('click', (e) => {
+                                        fetch('/track-click', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({partner_code:partnerId,click:true})});
+                                    });
+                                }
+                            }, 100);
+                        }
                     });
                     container.innerHTML = html;
                 } else {
-                    container.innerHTML = `<h1>${escapeHtml(document.getElementById('main-title').innerText)}</h1><div class="sub">${escapeHtml(document.getElementById('sub-title').innerText)}</div><div style="background: var(--card-bg); border-radius: 20px; padding: 40px 20px; text-align: center;">😔 На данный момент нет активных акций</div><div class="footer">Stalker-Co — всё для профессионалов</div>`;
+                    container.innerHTML = `<h1>${escapeHtml(document.getElementById('main-title').innerText)}</h1><div class="sub">${escapeHtml(document.getElementById('sub-title').innerText)}</div><div style="background: var(--card-bg); border-radius: 20px; padding: 40px 20px; text-align: center;">� На данный момент нет активных акций</div><div class="footer">Stalker-Co — всё для профессионалов</div>`;
                 }
             })
             .catch(error => {
@@ -197,11 +205,9 @@ def promo_page(partner_code):
 def promo_data(partner_code):
     all_mode = request.args.get('all') == '1'
     brand_filter = request.args.get('brand')
-    logger.info(f"Запрос данных: partner={partner_code}, all={all_mode}, brand={brand_filter}")
     if all_mode:
         banners = bitrix_client.get_banners_sync(partner_code)
         if not banners:
-            logger.warning("Нет баннеров для all_mode")
             return jsonify({"promotions": []}), 404
         enriched = []
         for banner in banners:
@@ -215,12 +221,10 @@ def promo_data(partner_code):
             })
         if brand_filter:
             enriched = [p for p in enriched if brand_filter.lower() in p['name'].lower()]
-        logger.info(f"Отправлено {len(enriched)} общих акций")
         return jsonify({"promotions": enriched})
     else:
         promotions_list = promo_client.get_promotions_list_sync(partner_code)
         if not promotions_list:
-            logger.warning("Нет персональных акций")
             return jsonify({"promotions": []}), 404
         
         promo_ids = []
@@ -230,18 +234,18 @@ def promo_data(partner_code):
             if promo_id:
                 promo_ids.append(promo_id)
                 promo_map[promo_id] = promo
-        logger.info(f"Собрано ID акций: {promo_ids}")
         
         if not promo_ids:
-            logger.warning("Нет ID акций")
             return jsonify({"promotions": []}), 404
         
         details_map = promo_client.get_promotion_details_batch_sync(promo_ids)
-        logger.info(f"Получены детали для {len(details_map)} акций")
         
         enriched = []
         for promo_id, promo in promo_map.items():
             details = details_map.get(promo_id)
+            if not details:
+                # Пропускаем акции, для которых нет деталей
+                continue
             if brand_filter:
                 promo_mark = promo.get('mark', '')
                 if promo_mark.lower() != brand_filter.lower():
@@ -254,8 +258,17 @@ def promo_data(partner_code):
                 'mark': clean_text(promo.get('mark', '')),
                 'date_to': clean_text(promo.get('date_to', ''))
             })
-        logger.info(f"Отправлено {len(enriched)} персональных акций")
         return jsonify({"promotions": enriched})
+
+@app.route('/track-click', methods=['POST'])
+def track_click():
+    data = request.get_json()
+    partner_code = data.get('partner_code')
+    if partner_code:
+        db.increment_click_counter(partner_code)
+        logger.info(f"Клик зарегистрирован для {partner_code}")
+        return jsonify({"status": "ok"}), 200
+    return jsonify({"error": "No partner_code"}), 400
 
 @app.route('/health')
 def health_check():

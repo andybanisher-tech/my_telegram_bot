@@ -11,8 +11,8 @@ import soap_client
 import bitrix_client
 from handlers import (
     start, main_menu, companies, subscriptions, banners, partner_actions, bonus,
-    admin_news, admin_categories, admin_admins, admin_stats, admin_managers,
-    admin_set_bitrix_key, text_handler
+    admin_news, admin_categories, admin_admins, admin_stats, admin_stats_users,
+    admin_managers, admin_set_bitrix_key, text_handler
 )
 from utils.set_bot_commands import set_bot_commands
 from intent_classifier import load_llm_model
@@ -45,6 +45,7 @@ dp.include_router(admin_news.router)
 dp.include_router(admin_categories.router)
 dp.include_router(admin_admins.router)
 dp.include_router(admin_stats.router)
+dp.include_router(admin_stats_users.router)   # добавлено
 dp.include_router(admin_managers.router)
 dp.include_router(admin_set_bitrix_key.router)
 dp.include_router(text_handler.router)
