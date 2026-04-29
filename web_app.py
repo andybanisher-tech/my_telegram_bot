@@ -18,12 +18,6 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
-# Принудительно устанавливаем кодировку для всех ответов
-@app.after_request
-def set_charset(response):
-    response.headers['Content-Type'] = 'text/html; charset=utf-8'
-    return response
-
 def clean_text(text):
     if not text:
         return ""
@@ -35,7 +29,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
     <title>Акции для вас | Stalker-Co</title>
-    <meta property="og:title" content="� Персональные акции Stalker-Co" />
+    <meta property="og:title" content="Персональные акции Stalker-Co" />
     <meta property="og:description" content="Акции и специальные предложения, подготовленные специально для вас." />
     <meta property="og:type" content="website" />
     <meta property="og:image" content="https://stalker-co.ru/local/templates/stalker/images/logo.png" />
@@ -135,9 +129,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 </head>
 <body>
     <div class="container" id="content">
-        <h1 id="main-title">� Акции для вас</h1>
-        <div class="sub" id="sub-title">Персональные предложения</div>
-        <div class="loader">⏳ Загружаем акции...</div>
+        <h1 id="main-title">[Акции] Персональные предложения</h1>
+        <div class="sub" id="sub-title"></div>
+        <div class="loader">Загрузка...</div>
     </div>
     <div class="footer">Stalker-Co — всё для профессионалов</div>
     <script>
@@ -200,16 +194,16 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             try { partnerName = decodeURIComponent(partnerName); } catch(e) {}
         }
 
-        let pageTitle = '� Акции для вас';
-        let pageSubtitle = 'Персональные предложения';
+        let pageTitle = '[Акции] Персональные предложения';
+        let pageSubtitle = '';
         if (partnerName) {
-            pageTitle = `� Акции для ${escapeHtml(partnerName)}`;
+            pageTitle = `Акции для ${escapeHtml(partnerName)}`;
             pageSubtitle = `Персональные предложения (ID: ${escapeHtml(partnerId)})`;
         } else if (allMode) {
-            pageTitle = '� Все акции сайта';
+            pageTitle = 'Все акции сайта';
             pageSubtitle = 'Актуальные предложения';
         } else if (debugMode) {
-            pageTitle = '� Технический режим: проверка акций';
+            pageTitle = 'Технический режим: проверка акций';
             pageSubtitle = 'Жёлтым выделены акции без описания на сайте';
         }
 
@@ -236,23 +230,23 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                             <div class="promo-meta">
                                 ${promo.mark ? `<span class="brand-badge">${escapeHtml(promo.mark)}</span>` : ''}
                                 ${promoIdHtml}
-                                ${promo.date_to ? `<span>� до ${formatDate(promo.date_to)}</span>` : ''}
+                                ${promo.date_to ? `<span>до ${formatDate(promo.date_to)}</span>` : ''}
                             </div>
                             ${promo.image ? `<div class="promo-image"><img src="${escapeHtml(promo.image)}" alt="Превью акции"></div>` : ''}
                             ${promo.description ? `<div class="promo-description">${escapeHtml(promo.description)}</div>` : ''}
-                            ${promo.details_missing ? `<div class="warning-text">⚠️ ВНИМАНИЕ: Для этой акции нет описания на сайте! Требуется настройка.</div>` : ''}
-                            ${promoLink ? `<a href="#" onclick="trackClick('${escapeHtml(promo.id)}', '${escapeHtml(promo.name)}', '${escapeHtml(promo.link)}'); return false;" class="promo-button">� Подробнее на сайте</a>` : ''}
+                            ${promo.details_missing ? `<div class="warning-text">ВНИМАНИЕ: Для этой акции нет описания на сайте! Требуется настройка.</div>` : ''}
+                            ${promoLink ? `<a href="#" onclick="trackClick('${escapeHtml(promo.id)}', '${escapeHtml(promo.name)}', '${escapeHtml(promo.link)}'); return false;" class="promo-button">Подробнее на сайте</a>` : ''}
                         </div>
                         `;
                     });
                     container.innerHTML = html;
                 } else {
-                    container.innerHTML = `<h1>${escapeHtml(pageTitle)}</h1><div class="sub">${escapeHtml(pageSubtitle)}</div><div style="background: var(--card-bg); border-radius: 20px; padding: 40px 20px; text-align: center;">� На данный момент нет активных акций</div><div class="footer">Stalker-Co — всё для профессионалов</div>`;
+                    container.innerHTML = `<h1>${escapeHtml(pageTitle)}</h1><div class="sub">${escapeHtml(pageSubtitle)}</div><div style="background: var(--card-bg); border-radius: 20px; padding: 40px 20px; text-align: center;">На данный момент нет активных акций</div><div class="footer">Stalker-Co — всё для профессионалов</div>`;
                 }
             })
             .catch(error => {
                 console.error('Ошибка загрузки акций:', error);
-                document.getElementById('content').innerHTML = `<h1>${escapeHtml(pageTitle)}</h1><div class="sub">${escapeHtml(pageSubtitle)}</div><div style="background: var(--card-bg); border-radius: 20px; padding: 40px 20px; text-align: center;">❌ Ошибка загрузки акций. Попробуйте позже.</div><div class="footer">Stalker-Co — всё для профессионалов</div>`;
+                document.getElementById('content').innerHTML = `<h1>${escapeHtml(pageTitle)}</h1><div class="sub">${escapeHtml(pageSubtitle)}</div><div style="background: var(--card-bg); border-radius: 20px; padding: 40px 20px; text-align: center;">Ошибка загрузки акций. Попробуйте позже.</div><div class="footer">Stalker-Co — всё для профессионалов</div>`;
             });
     </script>
 </body>
@@ -301,7 +295,7 @@ def promo_data(partner_code):
 
     logger.info(f"Запрос данных: partner={partner_code}, debug={debug_mode}, all={all_mode}, brand={brand_filter}")
 
-    # 1. Технический режим: показываем все акции из первого запроса, помечая отсутствие деталей
+    # Технический режим
     if debug_mode:
         promotions_list = promo_client.get_promotions_list_sync(partner_code)
         if not promotions_list:
@@ -334,7 +328,7 @@ def promo_data(partner_code):
             enriched = [p for p in enriched if brand_filter.lower() in p['name'].lower()]
         return jsonify({"promotions": enriched})
 
-    # 2. Режим all=1: показываем все акции из второго запроса (banners)
+    # Режим all
     if all_mode:
         banners = bitrix_client.get_banners_sync(partner_code)
         if not banners:
@@ -355,7 +349,7 @@ def promo_data(partner_code):
             enriched = [p for p in enriched if brand_filter.lower() in p['name'].lower()]
         return jsonify({"promotions": enriched})
 
-    # 3. Обычный режим: персональные акции, только те, для которых есть детали
+    # Обычный режим
     promotions_list = promo_client.get_promotions_list_sync(partner_code)
     if not promotions_list:
         return jsonify({"promotions": []}), 404
