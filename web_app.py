@@ -100,7 +100,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         }
         .promo-image { margin: 15px 0; text-align: center; }
         .promo-image img { max-width: 100%; border-radius: 16px; max-height: 240px; object-fit: contain; background: var(--brand-bg); padding: 8px; }
-        .promo-description { color: var(--text-color); line-height: 1.45; margin: 15px 0; font-size: 15px; opacity: 0.8; }
+        .promo-description { line-height: 1.45; margin: 15px 0; font-size: 15px; color: var(--text-color); opacity: 0.8; }
         .promo-button {
             display: inline-block;
             background-color: var(--button-bg);
@@ -221,21 +221,21 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 if (data.promotions && data.promotions.length) {
                     let html = `<h1>${escapeHtml(pageTitle)}</h1><div class="sub">${escapeHtml(pageSubtitle)}</div>`;
                     data.promotions.forEach(promo => {
-                        const link = promo.link;
                         const cardClass = promo.details_missing ? 'promo-card warning' : 'promo-card';
-                        const promoLink = link && !promo.details_missing ? `/click?promo_id=${encodeURIComponent(promo.id)}&promo_name=${encodeURIComponent(promo.name)}&url=${encodeURIComponent(link)}` : null;
+                        const promoLink = promo.link && !promo.details_missing ? `/click?promo_id=${encodeURIComponent(promo.id)}&promo_name=${encodeURIComponent(promo.name)}&url=${encodeURIComponent(promo.link)}` : null;
+                        const promoIdHtml = debugMode ? `<span class="promo-id">ID: ${escapeHtml(promo.id)}</span>` : '';
                         html += `
                         <div class="${cardClass}">
                             <div class="promo-title">${escapeHtml(promo.name)}</div>
                             <div class="promo-meta">
                                 ${promo.mark ? `<span class="brand-badge">${escapeHtml(promo.mark)}</span>` : ''}
-                                <span class="promo-id">ID: ${escapeHtml(promo.id)}</span>
+                                ${promoIdHtml}
                                 ${promo.date_to ? `<span>� до ${formatDate(promo.date_to)}</span>` : ''}
                             </div>
                             ${promo.image ? `<div class="promo-image"><img src="${escapeHtml(promo.image)}" alt="Превью акции"></div>` : ''}
                             ${promo.description ? `<div class="promo-description">${escapeHtml(promo.description)}</div>` : ''}
                             ${promo.details_missing ? `<div class="warning-text">⚠️ ВНИМАНИЕ: Для этой акции нет описания на сайте! Требуется настройка.</div>` : ''}
-                            ${promoLink ? `<a href="#" onclick="trackClick('${escapeHtml(promo.id)}', '${escapeHtml(promo.name)}', '${escapeHtml(link)}'); return false;" class="promo-button">� Подробнее на сайте</a>` : ''}
+                            ${promoLink ? `<a href="#" onclick="trackClick('${escapeHtml(promo.id)}', '${escapeHtml(promo.name)}', '${escapeHtml(promo.link)}'); return false;" class="promo-button">� Подробнее на сайте</a>` : ''}
                         </div>
                         `;
                     });
@@ -295,31 +295,117 @@ def promo_data(partner_code):
 
     logger.info(f"Запрос данных: partner={partner_code}, debug={debug_mode}, all={all_mode}, brand={brand_filter}")
 
-    # 1. Технический режим (debug=1): показываем ВСЕ акции из первого запроса, явно помечая отсутствие деталей
-    if debug_mode:
-        promotions_list = promo_client.get_promotions_list_sync(partner_code)
-        if not promotions_list:
+    # 1. Режим all=1: показываем все акции из второго запроса (banners) без фильтрации
+    if all_mode:
+        banners = bitrix_client.get_banners_sync(partner_code)
+        if not banners:
             return jsonify({"promotions": []}), 404
         enriched = []
-        for promo in promotions_list:
-            promo_id = promo.get('id')
-            if not promo_id:
-                continue
+        for banner in banners:
             enriched.append({
-                'id': promo_id,
-                'name': clean_text(promo.get('name', 'Акция')),
-                'description': '',
-                'image': None,
-                'link': None,
-                'mark': clean_text(promo.get('mark', '')),
-                'date_to': clean_text(promo.get('date_to', '')),
-                'details_missing': True  # флаг для интерфейса, что это акция без деталей
+                'id': banner.get('id'),
+                'name': clean_text(banner.get('name', 'Акция')),
+                'description': clean_text(banner.get('description', '')),
+                'image': clean_text(banner.get('image')),
+                'link': clean_text(banner.get('link')),
+                'mark': '',
+                'date_to': clean_text(banner.get('date_to', '')),
+                'details_missing': False
             })
         if brand_filter:
             enriched = [p for p in enriched if brand_filter.lower() in p['name'].lower()]
         return jsonify({"promotions": enriched})
 
-    # 2. Режим all=1: показываем все акции из ВТОРОГО запроса (banners)
+    # 2. Обычный режим: персональные акции, только те, для которых есть детали (чтобы не показывать "пустышки")
+    promotions_list = promo_client.get_promotions_list_sync(partner_code)
+    if not promotions_list:
+        return jsonify({"promotions": []}), 404
+
+    promo_ids = []
+    for promo in promotions_list:
+        if promo.get('id'):
+            promo_ids.append(promo['id'])
+
+    if not promo_ids:
+        return jsonify({"promotions": []}), 404
+
+    details_map = promo_client.get_promotion_details_batch_sync(promo_ids)
+
+    enriched = []
+    for promo in promotions_list:
+        promo_id = promo.get('id')
+        details = details_map.get(promo_id)
+        if not details:
+            continue  # пропускаем акции без деталей
+        if brand_filter:
+            promo_mark = promo.get('mark', '')
+            if promo_mark.lower() != brand_filter.lower():
+                continue
+        enriched.append({
+            'id': promo_id,
+            'name': clean_text(details.get('name')) if details else clean_text(promo.get('name', 'Акция')),
+            'description': clean_text(details.get('description')) if details else '',
+            'image': clean_text(details.get('image')) if details else None,
+            'link': clean_text(details.get('link')) if details else None,
+            'mark': clean_text(promo.get('mark', '')),
+            'date_to': clean_text(promo.get('date_to', '')),
+            'details_missing': False
+        })
+    return jsonify({"promotions": enriched})
+
+    # 3. Технический режим debug=1: показываем ВСЕ акции из первого запроса, но помечаем те, для которых нет деталей
+    # (этот блок недостижим из-за return выше, но мы его перенесём выше по приоритету)
+    # На самом деле, debug_mode должен обрабатываться раньше all_mode? Лучше так:
+    # приоритет: debug → all → обычный.
+    # Поэтому я перепишу порядок.
+
+# Поскольку я переписываю функцию, нужно правильно расставить приоритеты.
+# Полностью перепишу функцию promo_data с правильным порядком.
+
+# Вот окончательная версия функции promo_data (вставьте её вместо предыдущей):
+
+@app.route('/promo/<partner_code>/data')
+def promo_data(partner_code):
+    debug_mode = request.args.get('debug') == '1'
+    all_mode = request.args.get('all') == '1'
+    brand_filter = request.args.get('brand')
+
+    logger.info(f"Запрос данных: partner={partner_code}, debug={debug_mode}, all={all_mode}, brand={brand_filter}")
+
+    # 1. Технический режим: показываем все акции из первого запроса, помечая отсутствие деталей
+    if debug_mode:
+        promotions_list = promo_client.get_promotions_list_sync(partner_code)
+        if not promotions_list:
+            return jsonify({"promotions": []}), 404
+
+        promo_ids = []
+        promo_map = {}
+        for promo in promotions_list:
+            promo_id = promo.get('id')
+            if promo_id:
+                promo_ids.append(promo_id)
+                promo_map[promo_id] = promo
+
+        details_map = promo_client.get_promotion_details_batch_sync(promo_ids) if promo_ids else {}
+
+        enriched = []
+        for promo_id, promo in promo_map.items():
+            details = details_map.get(promo_id)
+            enriched.append({
+                'id': promo_id,
+                'name': clean_text(promo.get('name', 'Акция')),
+                'description': clean_text(details.get('description')) if details else '',
+                'image': clean_text(details.get('image')) if details else None,
+                'link': clean_text(details.get('link')) if details else None,
+                'mark': clean_text(promo.get('mark', '')),
+                'date_to': clean_text(promo.get('date_to', '')),
+                'details_missing': details is None
+            })
+        if brand_filter:
+            enriched = [p for p in enriched if brand_filter.lower() in p['name'].lower()]
+        return jsonify({"promotions": enriched})
+
+    # 2. Режим all=1: показываем все акции из второго запроса
     if all_mode:
         banners = bitrix_client.get_banners_sync(partner_code)
         if not banners:
@@ -362,7 +448,7 @@ def promo_data(partner_code):
     for promo_id, promo in promo_map.items():
         details = details_map.get(promo_id)
         if not details:
-            continue  # пропускаем акции без деталей
+            continue
         if brand_filter:
             promo_mark = promo.get('mark', '')
             if promo_mark.lower() != brand_filter.lower():
@@ -379,9 +465,4 @@ def promo_data(partner_code):
         })
     return jsonify({"promotions": enriched})
 
-@app.route('/health')
-def health_check():
-    return "OK", 200
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8000)
+# Не забудьте удалить предыдущее определение функции promo_data, оставив только это.
