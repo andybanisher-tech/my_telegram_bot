@@ -1,7 +1,6 @@
 import os
 import logging
 import re
-import urllib.parse
 from flask import Flask, render_template_string, jsonify, request, redirect, abort
 from dotenv import load_dotenv
 from pathlib import Path
@@ -160,19 +159,14 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             });
         }
 
-        function trackClick(element) {
-            var promoId = element.getAttribute('data-promo-id');
-            var promoName = element.getAttribute('data-promo-name');
-            var originalUrl = element.getAttribute('data-url');
-            if (!originalUrl) return;
+        function trackClick(promoId, promoName, originalUrl) {
             fetch('/click', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     promo_id: promoId,
                     promo_name: promoName,
-                    user_id: tg.initDataUnsafe?.user?.id,
-                    url: originalUrl
+                    user_id: tg.initDataUnsafe?.user?.id
                 })
             }).catch(e => console.error('Click log error:', e));
             tg.openLink(originalUrl);
@@ -239,7 +233,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                             ${promo.image ? `<div class="promo-image"><img src="${escapeHtml(promo.image)}" alt="Превью акции"></div>` : ''}
                             ${promo.description ? `<div class="promo-description">${escapeHtml(promo.description)}</div>` : ''}
                             ${promo.details_missing ? `<div class="warning-text">ВНИМАНИЕ: Для этой акции нет описания на сайте! Требуется настройка.</div>` : ''}
-                            ${promoLink ? `<a href="#" data-promo-id="${escapeHtml(promo.id)}" data-promo-name="${escapeHtml(promo.name)}" data-url="${escapeHtml(promoLink)}" onclick="trackClick(this); return false;" class="promo-button">Подробнее на сайте</a>` : ''}
+                            ${promoLink ? `<a href="#" onclick="trackClick('${escapeHtml(promo.id)}', '${escapeHtml(promo.name)}', '${escapeHtml(promoLink)}'); return false;" class="promo-button">Подробнее на сайте</a>` : ''}
                         </div>
                         `;
                     });
@@ -260,6 +254,24 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 @app.route('/promo/<partner_code>')
 def promo_page(partner_code):
     return render_template_string(HTML_TEMPLATE)
+
+@app.route('/tg')
+def tg_redirect():
+    return '''<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Переход к боту</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script>
+        window.location.href = "tg://resolve?domain=stalkerco_news_bot";
+        setTimeout(function() {
+            document.body.innerHTML = '<div style="text-align:center; padding:50px;"><h2>Не удалось открыть Telegram</h2><p>Пожалуйста, установите Telegram:</p><a href="https://telegram.org/dl" target="_blank" rel="noopener noreferrer">Скачать Telegram</a></div>';
+        }, 1000);
+    </script>
+</head>
+<body>Переход в Telegram...</body>
+</html>'''
 
 @app.route('/click', methods=['GET', 'POST'])
 def click_handler():
@@ -299,7 +311,6 @@ def promo_data(partner_code):
 
     logger.info(f"Запрос данных: partner={partner_code}, debug={debug_mode}, all={all_mode}, brand={brand_filter}")
 
-    # Технический режим
     if debug_mode:
         promotions_list = promo_client.get_promotions_list_sync(partner_code)
         if not promotions_list:
@@ -332,7 +343,6 @@ def promo_data(partner_code):
             enriched = [p for p in enriched if brand_filter.lower() in p['name'].lower()]
         return jsonify({"promotions": enriched})
 
-    # Режим all
     if all_mode:
         banners = bitrix_client.get_banners_sync(partner_code)
         if not banners:
@@ -353,7 +363,6 @@ def promo_data(partner_code):
             enriched = [p for p in enriched if brand_filter.lower() in p['name'].lower()]
         return jsonify({"promotions": enriched})
 
-    # Обычный режим
     promotions_list = promo_client.get_promotions_list_sync(partner_code)
     if not promotions_list:
         return jsonify({"promotions": []}), 404
