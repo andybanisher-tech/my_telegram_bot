@@ -3,7 +3,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uvicorn
-import web_chat_handler
+from web_chat_handler import handle_web_message
 
 app = FastAPI()
 app.add_middleware(
@@ -18,15 +18,12 @@ class ChatRequest(BaseModel):
 
 @app.post("/chat")
 async def chat_endpoint(req: ChatRequest):
-    try:
-        reply = await web_chat_handler.handle_web_message(
-            user_id=req.user_id,
-            message_text=req.message,
-            context=req.context
-        )
-        return {"response": reply}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    reply = await handle_web_message(
+        user_id=req.user_id,
+        message_text=req.message,
+        context=req.context
+    )
+    return {"response": reply}
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8001)
