@@ -7,7 +7,7 @@ import soap_client
 
 logger = logging.getLogger(__name__)
 
-async def handle_web_message(user_id: int, message_text: str, context: str = "") -> str:
+async def handle_web_message(user_id: int, message_text: str, context: str = "", partner_id: str = None) -> str:
     text = message_text.strip().lower()
     if len(text) < 2:
         return "Пожалуйста, введите более длинный запрос."
@@ -19,7 +19,7 @@ async def handle_web_message(user_id: int, message_text: str, context: str = "")
     if any(word in text for word in ["компани", "контрагент", "организаци"]):
         return await handle_companies(user_id)
     if any(word in text for word in ["акци", "скидк", "промо"]):
-        return await handle_banners(user_id, message_text)
+        return await handle_banners(user_id, partner_id)  
     if any(word in text for word in ["подписк", "подписаться", "рассылка"]):
         return "Управление подписками доступно в личном кабинете на сайте."
     if any(word in text for word in ["помощ", "help", "что ты умеешь", "команд"]):
@@ -49,17 +49,21 @@ async def handle_companies(user_id: int) -> str:
         lines.append(f"• {comp['name']} (код {comp['code']})")
     return "\n".join(lines)
 
-async def handle_banners(user_id: int, text: str) -> str:
+async def handle_banners(user_id: int, partner_id: str = None) -> str:
+    if not partner_id:
+        return "Не указан партнёрский идентификатор. Проверьте настройки профиля."
     try:
-        from utils.helpers import is_manager
-        if is_manager(user_id):
-            match = re.search(r'([a-zA-Zа-яА-Я])(\d+)', text)
-            if match:
-                partner_id = match.group(1).upper() + match.group(2)
-                return await handle_partner_actions(partner_id)
-    except:
-        pass
-    return "Актуальные акции доступны на сайте в разделе «Акции»."
+        promotions = await promo_client.get_promotions_list_sync(partner_id)
+        if not promotions:
+            return "Для вашего контрагента нет активных акций."
+        # Форматируем список акций
+        lines = ["Ваши персональные акции:"]
+        for promo in promotions:
+            lines.append(f"• {promo.get('name', 'Акция')} – подробнее на сайте")
+        return "\n".join(lines)
+    except Exception as e:
+        logger.error(f"Error fetching promotions: {e}")
+        return "Не удалось загрузить акции. Попробуйте позже."
 
 async def handle_partner_actions(partner_id: str) -> str:
     info = await soap_client.get_partner_by_id(partner_id)

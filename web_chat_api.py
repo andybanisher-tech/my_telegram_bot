@@ -15,13 +15,15 @@ class ChatRequest(BaseModel):
     user_id: int = 0
     message: str
     context: str = ""
+    partner_id: str = None   # новое поле для акций
 
 @app.post("/chat")
 async def chat_endpoint(req: ChatRequest):
     reply = await handle_web_message(
         user_id=req.user_id,
         message_text=req.message,
-        context=req.context
+        context=req.context,
+        partner_id=req.partner_id   # передаём в обработчик
     )
     return {"response": reply}
 
