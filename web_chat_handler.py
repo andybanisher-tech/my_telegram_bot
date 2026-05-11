@@ -1,3 +1,6 @@
+from dotenv import load_dotenv
+load_dotenv()
+
 import re
 import logging
 import os
@@ -54,10 +57,12 @@ async def handle_banners(user_id: int, partner_id: str = None) -> str:
     if not partner_id:
         return "Не указан партнёрский идентификатор. Проверьте настройки профиля."
     try:
-        promotions = await promo_client.get_promotions_list_sync(partner_id)
+        # Промо-клиент синхронный, убираем await
+        promotions = promo_client.get_promotions_list_sync(partner_id)
+        if promotions is None:
+            return "Сервис акций временно недоступен."
         if not promotions:
             return "Для вашего контрагента нет активных акций."
-        # Форматируем список акций
         lines = ["Ваши персональные акции:"]
         for promo in promotions:
             lines.append(f"• {promo.get('name', 'Акция')} – подробнее на сайте")
