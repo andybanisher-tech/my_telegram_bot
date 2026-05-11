@@ -1,4 +1,3 @@
-cat > ~/my_telegram_bot/web_chat_handler.py << 'ENDOFFILE'
 import re
 import logging
 import os
@@ -13,7 +12,6 @@ async def handle_web_message(user_id: int, message_text: str, context: str = "")
     if len(text) < 2:
         return "Пожалуйста, введите более длинный запрос."
 
-    # Простая проверка ключевых слов вместо модели
     if any(word in text for word in ["баланс", "бонусный", "бонусы"]):
         return await handle_balance(user_id)
     if any(word in text for word in ["истори", "операци", "заказ"]):
@@ -27,7 +25,6 @@ async def handle_web_message(user_id: int, message_text: str, context: str = "")
     if any(word in text for word in ["помощ", "help", "что ты умеешь", "команд"]):
         return get_help_text()
     
-    # Если ничего не подошло – отправляем в LLM
     return await handle_general(user_id, message_text, context)
 
 async def handle_balance(user_id: int) -> str:
@@ -53,7 +50,6 @@ async def handle_companies(user_id: int) -> str:
     return "\n".join(lines)
 
 async def handle_banners(user_id: int, text: str) -> str:
-    # Проверка менеджера и извлечение ID партнёра (если есть)
     try:
         from utils.helpers import is_manager
         if is_manager(user_id):
@@ -100,4 +96,3 @@ async def handle_general(user_id: int, text: str, context: str) -> str:
     except Exception as e:
         logger.error(f"LLM error: {e}")
         return "Извините, произошла ошибка."
-ENDOFFILE
