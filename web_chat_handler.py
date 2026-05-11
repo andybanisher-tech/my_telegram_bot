@@ -4,6 +4,7 @@ import os
 import httpx
 import database as db
 import soap_client
+import promo_client
 
 logger = logging.getLogger(__name__)
 
