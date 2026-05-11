@@ -1,15 +1,15 @@
 import sys
 import os
-import json
-import httpx
+import logging
+import asyncio
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uvicorn
+import web_chat_handler
 
 app = FastAPI()
 
-# Разрешаем CORS для всех источников (или укажите ваш домен)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -18,35 +18,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-LLM_SERVER_URL = "http://31.76.227.1:8000/v1/chat/completions"
-LLM_MODEL = "cotype-nano-Q4_K_M.gguf"
-
 class ChatRequest(BaseModel):
-    user_id: str
+    user_id: int = 0
     message: str
     context: str = ""
 
 @app.post("/chat")
 async def chat_endpoint(req: ChatRequest):
     try:
-        prompt = f"Клиент (ID {req.user_id}). Контекст: {req.context}. Сообщение: {req.message}"
-        
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.post(
-                LLM_SERVER_URL,
-                json={
-                    "model": LLM_MODEL,
-                    "messages": [{"role": "user", "content": prompt}],
-                    "temperature": 0.5,
-                    "max_tokens": 200
-                },
-                headers={"Content-Type": "application/json"}
-            )
-            if resp.status_code != 200:
-                raise HTTPException(status_code=500, detail=f"LLM error: {resp.status_code}")
-            data = resp.json()
-            answer = data["choices"][0]["message"]["content"]
-        return {"response": answer.strip()}
+        response_text = await web_chat_handler.handle_web_message(
+            user_id=req.user_id,
+            message_text=req.message,
+            context=req.context
+        )
+        return {"response": response_text}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
