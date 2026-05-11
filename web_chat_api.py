@@ -1,48 +1,54 @@
 import sys
 import os
 import json
-import asyncio
+import httpx
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uvicorn
 
-# Добавим путь к нашему боту, чтобы импортировать его модули
-sys.path.append(os.path.dirname(__file__))
-
-# Импортируем необходимые функции из вашего бота
-from bot import dp, bot, LLM_SERVER_URL, LLM_MODEL
-from handlers.chat import generate_response  # предполагается, что у вас там функция для генерации ответа
-from handlers.start import search_user  # функция поиска пользователя по номеру
-from handlers.commands import send_llm_request  # функция отправки запроса к LLM
-
 app = FastAPI()
+
+# Разрешаем CORS для всех источников (или укажите ваш домен)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+LLM_SERVER_URL = "http://31.76.227.1:8000/v1/chat/completions"
+LLM_MODEL = "cotype-nano-Q4_K_M.gguf"
 
 class ChatRequest(BaseModel):
     user_id: str
-    phone: str = None  # если есть возможность получить телефон
     message: str
-    context: str = ""  # контекст из поиска
+    context: str = ""
 
 @app.post("/chat")
 async def chat_endpoint(req: ChatRequest):
     try:
-        # Получаем данные пользователя по телефону (если передан)
-        user_data = None
-        if req.phone:
-            user_data = await search_user(req.phone)
-            if not user_data:
-                return {"response": "Пользователь с таким номером не найден."}
-        # Иначе можно попробовать найти по user_id (если есть соответствующий API)
-        # Формируем промпт для LLM с учётом контекста
-        prompt = f"Клиент {user_data.get('name', '')} (группа {user_data.get('group', '')}). " if user_data else ""
-        prompt += f"Контекст поиска: {req.context}. " if req.context else ""
-        prompt += f"Сообщение: {req.message}"
+        prompt = f"Клиент (ID {req.user_id}). Контекст: {req.context}. Сообщение: {req.message}"
         
-        response = await generate_response(prompt)  # функция генерации ответа из вашего бота
-        return {"response": response}
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.post(
+                LLM_SERVER_URL,
+                json={
+                    "model": LLM_MODEL,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": 0.5,
+                    "max_tokens": 200
+                },
+                headers={"Content-Type": "application/json"}
+            )
+            if resp.status_code != 200:
+                raise HTTPException(status_code=500, detail=f"LLM error: {resp.status_code}")
+            data = resp.json()
+            answer = data["choices"][0]["message"]["content"]
+        return {"response": answer.strip()}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8001)
-    
