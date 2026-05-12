@@ -4,17 +4,15 @@ import os
 import httpx
 import database as db
 import soap_client
-from intent_classifier import extract_brand, load_llm_model
+import promo_client
+from intent_classifier import extract_brand  # используем ту же логику, что в боте
 
 logger = logging.getLogger(__name__)
 
 SEARCH_URL = os.getenv("SEARCH_URL", "https://dev.stalker-co.ru/ajax/search.php")
-BASE_WEB_URL = os.getenv("BASE_WEB_URL", "https://news-bot-stalker.ru")
 LLM_SERVER_URL = os.getenv("LLM_SERVER_URL", "http://31.76.227.1:8000/v1/chat/completions")
 LLM_MODEL = os.getenv("LLM_MODEL", "cotype-nano-Q4_K_M.gguf")
-
-# Загружаем модель один раз для extract_brand
-_llm_instance = load_llm_model()
+BASE_WEB_URL = os.getenv("BASE_WEB_URL", "https://news-bot-stalker.ru")
 
 async def handle_web_message(user_id: int, message_text: str, context: str = "", partner_id: str = None) -> str:
     text = message_text.strip().lower()
@@ -27,7 +25,7 @@ async def handle_web_message(user_id: int, message_text: str, context: str = "",
 
     # Акции
     if any(w in text for w in ["акци", "скидк", "промо"]):
-        return await handle_banners(user_id, text, partner_id)
+        return await handle_banners(user_id, partner_id, message_text)
 
     # Баланс
     if any(w in text for w in ["баланс", "бонусный", "бонусы"]):
@@ -86,22 +84,31 @@ async def handle_search(user_id: int, query: str, context: str) -> str:
         return "Произошла ошибка при поиске."
 
 
-async def handle_banners(user_id: int, text: str, partner_id: str = None) -> str:
+async def handle_banners(user_id: int, partner_id: str = None, text: str = "") -> str:
     if not partner_id:
         return "Не указан партнёрский идентификатор. Проверьте настройки профиля."
-
-    # Извлекаем бренд из сообщения с помощью LLM
-    brand_filter = extract_brand(text, _llm_instance) if _llm_instance else None
-
-    # Формируем URL Web App
+    
+    # Определяем бренд через LLM (как в Telegram-боте)
+    brand_filter = None
+    if text:
+        brand_filter = extract_brand(text, _llm_instance) if _llm_instance else None
+        # если не удалось извлечь, попробуем простое правило для демонстрации
+        if not brand_filter:
+            match = re.search(r'по\s+(\w+)', text, re.IGNORECASE)
+            if match:
+                brand_filter = match.group(1).capitalize()
+    
     web_app_url = f"{BASE_WEB_URL}/promo/{partner_id}"
     if brand_filter:
         web_app_url += f"?brand={brand_filter}"
-
-    return (
-        '🎁 <a href="' + web_app_url + '" target="_blank">Открыть персональные акции</a>'
-        + (' (бренд: ' + brand_filter + ')' if brand_filter else '')
-    )
+    
+    # Возвращаем JSON с инструкцией открыть модальное окно
+    import json
+    return json.dumps({
+        "action": "open_modal",
+        "url": web_app_url,
+        "text": f"🎁 Вот акции специально для вас{f' по бренду {brand_filter}' if brand_filter else ''}!"
+    }, ensure_ascii=False)
 
 
 async def handle_balance(user_id: int) -> str:
@@ -160,3 +167,12 @@ async def handle_general(user_id: int, text: str, context: str) -> str:
     except Exception as e:
         logger.error(f"LLM error: {e}")
         return "Извините, произошла ошибка."
+
+
+# Глобальная LLM-модель для extract_brand
+_llm_instance = None
+try:
+    from intent_classifier import load_llm_model
+    _llm_instance = load_llm_model()
+except Exception as e:
+    logger.warning(f"Не удалось загрузить LLM для извлечения бренда: {e}")
