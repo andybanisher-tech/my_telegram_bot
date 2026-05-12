@@ -1,6 +1,7 @@
 import re
 import logging
 import os
+import json
 import httpx
 import database as db
 import soap_client
@@ -12,6 +13,7 @@ SEARCH_URL = os.getenv("SEARCH_URL", "https://dev.stalker-co.ru/ajax/search.php"
 LLM_SERVER_URL = os.getenv("LLM_SERVER_URL", "http://31.76.227.1:8000/v1/chat/completions")
 LLM_MODEL = os.getenv("LLM_MODEL", "cotype-nano-Q4_K_M.gguf")
 BASE_WEB_URL = os.getenv("BASE_WEB_URL", "https://news-bot-stalker.ru")
+LLM_TIMEOUT = 60  # секунд
 
 # Глобальная LLM-модель для extract_brand
 _llm_instance = None
@@ -50,7 +52,7 @@ async def handle_web_message(user_id: int, message_text: str, context: str = "",
 
 
 async def handle_search(user_id: int, query: str, context: str) -> str:
-    # Убираем вводные слова, чтобы получить чистый запрос
+    # Убираем вводные слова
     search_query = re.sub(r'(найди|поищи|подбери|посоветуй|хочу купить|ищу|нужен|нужна|нужно|покажи)\s*', '', query, flags=re.IGNORECASE).strip()
     if not search_query:
         search_query = query.strip()
@@ -103,15 +105,12 @@ async def handle_banners(user_id: int, partner_id: str = None, text: str = "") -
     if brand_filter:
         web_app_url += f"?brand={brand_filter}"
     
-    brand_text = f' по бренду {brand_filter}' if brand_filter else ''
-    return (
-        f'<div class="mlk-chat-promo-message">'
-        f'<p><b>Вот акции специально для вас{brand_text}!</b></p>'
-        f'<div class="mlk-chat-promo-button" data-url="{web_app_url}">'
-        f'   <span></span> Открыть акции'
-        f'</div>'
-        f'</div>'
-    )
+    # Возвращаем JSON-команду для открытия модального окна
+    return json.dumps({
+        "action": "open_modal",
+        "url": web_app_url,
+        "text": f"Акции{f' по бренду {brand_filter}' if brand_filter else ''}"
+    }, ensure_ascii=False)
 
 
 async def handle_balance(user_id: int) -> str:
@@ -151,7 +150,6 @@ def get_help_text() -> str:
         "• Помощь"
     )
 
-LLM_TIMEOUT = 600  # секунд
 
 async def handle_general(user_id: int, text: str, context: str) -> str:
     url = LLM_SERVER_URL
