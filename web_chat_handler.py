@@ -26,41 +26,34 @@ async def handle_web_message(user_id: int, message_text: str, context: str = "",
     if len(text) < 2:
         return "Пожалуйста, введите более длинный запрос."
 
-    # Поиск товаров
-    if any(w in text for w in ["найди", "поищи", "подбери", "посоветуй", "хочу купить"]):
-        return await handle_search(user_id, message_text, context)
-
-    # Акции
+    # Явные команды
     if any(w in text for w in ["акци", "скидк", "промо"]):
         return await handle_banners(user_id, partner_id, message_text)
-
-    # Баланс
     if any(w in text for w in ["баланс", "бонусный", "бонусы"]):
         return await handle_balance(user_id)
-
-    # История
     if any(w in text for w in ["истори", "операци", "заказ"]):
         return await handle_history(user_id)
-
-    # Компании
     if any(w in text for w in ["компани", "контрагент", "организаци"]):
         return await handle_companies(user_id)
-
-    # Подписки
     if any(w in text for w in ["подписк", "подписаться", "рассылка"]):
         return "Управление подписками доступно в личном кабинете на сайте."
-
-    # Помощь
     if any(w in text for w in ["помощ", "help", "что ты умеешь", "команд"]):
         return get_help_text()
 
+    # По умолчанию пробуем поиск товара
+    search_result = await handle_search(user_id, message_text, context)
+    if "ничего не найдено" not in search_result and "Не удалось выполнить поиск" not in search_result and search_result != "":
+        return search_result
+
+    # Если поиск не дал результатов – отправляем в LLM
     return await handle_general(user_id, message_text, context)
 
 
 async def handle_search(user_id: int, query: str, context: str) -> str:
-    search_query = re.sub(r'(найди|поищи|подбери|посоветуй|хочу купить)\s*', '', query, flags=re.IGNORECASE).strip()
+    # Убираем вводные слова, чтобы получить чистый запрос
+    search_query = re.sub(r'(найди|поищи|подбери|посоветуй|хочу купить|ищу|нужен|нужна|нужно|покажи)\s*', '', query, flags=re.IGNORECASE).strip()
     if not search_query:
-        return "Пожалуйста, уточните, что вы хотите найти."
+        search_query = query.strip()
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.get(SEARCH_URL, params={"query": search_query, "limit": 3})
@@ -157,7 +150,6 @@ def get_help_text() -> str:
         "• Реферальная программа\n"
         "• Помощь"
     )
-
 
 async def handle_general(user_id: int, text: str, context: str) -> str:
     url = LLM_SERVER_URL
