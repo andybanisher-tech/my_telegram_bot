@@ -1,19 +1,20 @@
-from dotenv import load_dotenv
-load_dotenv()
-
 import re
 import logging
 import os
 import httpx
 import database as db
 import soap_client
-import promo_client
+from intent_classifier import extract_brand, load_llm_model
 
 logger = logging.getLogger(__name__)
 
 SEARCH_URL = os.getenv("SEARCH_URL", "https://dev.stalker-co.ru/ajax/search.php")
+BASE_WEB_URL = os.getenv("BASE_WEB_URL", "https://news-bot-stalker.ru")
 LLM_SERVER_URL = os.getenv("LLM_SERVER_URL", "http://31.76.227.1:8000/v1/chat/completions")
 LLM_MODEL = os.getenv("LLM_MODEL", "cotype-nano-Q4_K_M.gguf")
+
+# Загружаем модель один раз для extract_brand
+_llm_instance = load_llm_model()
 
 async def handle_web_message(user_id: int, message_text: str, context: str = "", partner_id: str = None) -> str:
     text = message_text.strip().lower()
@@ -26,7 +27,7 @@ async def handle_web_message(user_id: int, message_text: str, context: str = "",
 
     # Акции
     if any(w in text for w in ["акци", "скидк", "промо"]):
-        return await handle_banners(user_id, partner_id)
+        return await handle_banners(user_id, text, partner_id)
 
     # Баланс
     if any(w in text for w in ["баланс", "бонусный", "бонусы"]):
@@ -85,34 +86,22 @@ async def handle_search(user_id: int, query: str, context: str) -> str:
         return "Произошла ошибка при поиске."
 
 
-async def handle_banners(user_id: int, partner_id: str = None) -> str:
+async def handle_banners(user_id: int, text: str, partner_id: str = None) -> str:
     if not partner_id:
         return "Не указан партнёрский идентификатор. Проверьте настройки профиля."
-    try:
-        promotions = promo_client.get_promotions_list_sync(partner_id)
-        if not promotions:
-            return "Для вашего контрагента нет активных акций."
-        html_parts = ['<div class="mlk-chat-promotions">']
-        for promo in promotions:
-            name = promo.get('name', 'Акция')
-            desc = promo.get('description', '')
-            image_url = promo.get('image_url', '')
-            link = promo.get('link', '#')
-            img_tag = f'<img src="{image_url}" class="mlk-chat-promo-img" />' if image_url else ''
-            html_parts.append(f'''
-            <div class="mlk-chat-promo">
-                {img_tag}
-                <div class="mlk-chat-promo-info">
-                    <a href="{link}" target="_blank">{name}</a>
-                    <p>{desc}</p>
-                </div>
-            </div>
-            ''')
-        html_parts.append('</div>')
-        return ''.join(html_parts)
-    except Exception as e:
-        logger.error(f"Error fetching promotions: {e}")
-        return "Не удалось загрузить акции. Попробуйте позже."
+
+    # Извлекаем бренд из сообщения с помощью LLM
+    brand_filter = extract_brand(text, _llm_instance) if _llm_instance else None
+
+    # Формируем URL Web App
+    web_app_url = f"{BASE_WEB_URL}/promo/{partner_id}"
+    if brand_filter:
+        web_app_url += f"?brand={brand_filter}"
+
+    return (
+        '🎁 <a href="' + web_app_url + '" target="_blank">Открыть персональные акции</a>'
+        + (' (бренд: ' + brand_filter + ')' if brand_filter else '')
+    )
 
 
 async def handle_balance(user_id: int) -> str:
