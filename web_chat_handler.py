@@ -106,9 +106,9 @@ async def handle_banners(user_id: int, partner_id: str = None, text: str = "") -
     brand_text = f' по бренду {brand_filter}' if brand_filter else ''
     return (
         f'<div class="mlk-chat-promo-message">'
-        f'<p>🎁 <b>Вот акции специально для вас{brand_text}!</b></p>'
+        f'<p><b>Вот акции специально для вас{brand_text}!</b></p>'
         f'<div class="mlk-chat-promo-button" data-url="{web_app_url}">'
-        f'   <span>🎁</span> Открыть акции'
+        f'   <span></span> Открыть акции'
         f'</div>'
         f'</div>'
     )
@@ -151,12 +151,14 @@ def get_help_text() -> str:
         "• Помощь"
     )
 
+LLM_TIMEOUT = 60  # секунд
+
 async def handle_general(user_id: int, text: str, context: str) -> str:
     url = LLM_SERVER_URL
     model = LLM_MODEL
     prompt = f"Клиент (ID {user_id}). Контекст: {context}. Вопрос: {text}"
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=LLM_TIMEOUT) as client:
             resp = await client.post(url, json={
                 "model": model,
                 "messages": [{"role": "user", "content": prompt}],
@@ -165,7 +167,11 @@ async def handle_general(user_id: int, text: str, context: str) -> str:
             }, headers={"Content-Type": "application/json"})
             if resp.status_code == 200:
                 return resp.json()["choices"][0]["message"]["content"]
+            logger.error(f"LLM returned status {resp.status_code}: {resp.text}")
             return "Извините, не могу сейчас ответить."
+    except httpx.TimeoutException:
+        logger.error("LLM timeout")
+        return "Сервер временно перегружен, пожалуйста, попробуйте позже."
     except Exception as e:
         logger.error(f"LLM error: {e}")
         return "Извините, произошла ошибка."
