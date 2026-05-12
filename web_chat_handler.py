@@ -105,12 +105,16 @@ async def handle_banners(user_id: int, partner_id: str = None, text: str = "") -
     if brand_filter:
         web_app_url += f"?brand={brand_filter}"
     
-    # Возвращаем JSON-команду для открытия модального окна
-    return json.dumps({
-        "action": "open_modal",
-        "url": web_app_url,
-        "text": f"Акции{f' по бренду {brand_filter}' if brand_filter else ''}"
-    }, ensure_ascii=False)
+    # Возвращаем HTML с кнопкой
+    brand_text = f' по бренду {brand_filter}' if brand_filter else ''
+    return (
+        f'<div class="mlk-chat-promo-message">'
+        f'<p>Вот акции специально для вас{brand_text}!</p>'
+        f'<div class="mlk-chat-promo-button" data-url="{web_app_url}">'
+        f'<span>Открыть акции</span>'
+        f'</div>'
+        f'</div>'
+    )
 
 
 async def handle_balance(user_id: int) -> str:
