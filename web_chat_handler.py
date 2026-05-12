@@ -151,7 +151,7 @@ def get_help_text() -> str:
         "• Помощь"
     )
 
-LLM_TIMEOUT = 60  # секунд
+LLM_TIMEOUT = 600  # секунд
 
 async def handle_general(user_id: int, text: str, context: str) -> str:
     url = LLM_SERVER_URL
