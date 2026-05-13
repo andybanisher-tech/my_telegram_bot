@@ -27,9 +27,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>Акции для вас | Stalker-Co</title>
-    <meta property="og:title" content="Персональные акции Stalker-Co" />
-    <meta property="og:description" content="Акции и специальные предложения, подготовленные специально для вас." />
+    <title>Акции | Stalker-Co</title>
+    <meta property="og:title" content="Акции Stalker-Co" />
+    <meta property="og:description" content="Актуальные акции и предложения." />
     <meta property="og:type" content="website" />
     <meta property="og:image" content="https://stalker-co.ru/local/templates/stalker/images/logo.png" />
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
@@ -71,9 +71,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             --warning-text: #ffea8f;
         }
         .container { max-width: 550px; margin: 0 auto; }
-        h1 { font-size: 28px; font-weight: 600; margin-bottom: 8px; text-align: center; color: var(--text-color); }
-        .sub { text-align: center; color: var(--meta-color); margin-bottom: 28px; font-size: 15px; }
-        .loader { text-align: center; padding: 40px; color: var(--meta-color); }
         .promo-card {
             background: var(--card-bg);
             border-radius: 20px;
@@ -127,11 +124,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     </style>
 </head>
 <body>
-    <div class="container" id="content">
-        <h1 id="main-title">[Акции] Персональные предложения</h1>
-        <div class="sub" id="sub-title"></div>
-        <div class="loader">Загрузка...</div>
-    </div>
+    <div class="container" id="content"></div>
     <div class="footer">Stalker-Co — всё для профессионалов</div>
     <script>
         const tg = window.Telegram.WebApp;
@@ -192,22 +185,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             try { partnerName = decodeURIComponent(partnerName); } catch(e) {}
         }
 
-        let pageTitle = '[Акции] Персональные предложения';
-        let pageSubtitle = '';
-        if (partnerName) {
-            pageTitle = `Акции для ${escapeHtml(partnerName)}`;
-            pageSubtitle = `Персональные предложения (ID: ${escapeHtml(partnerId)})`;
-        } else if (allMode) {
-            pageTitle = 'Все акции сайта';
-            pageSubtitle = 'Актуальные предложения';
-        } else if (debugMode) {
-            pageTitle = 'Технический режим: проверка акций';
-            pageSubtitle = 'Жёлтым выделены акции без описания на сайте';
-        }
-
-        document.getElementById('main-title').innerText = pageTitle;
-        document.getElementById('sub-title').innerText = pageSubtitle;
-
         let dataUrl = window.location.pathname + '/data' + (brandFilter ? `?brand=${brandFilter}` : '');
         if (debugMode) dataUrl += (brandFilter ? '&' : '?') + 'debug=1';
         else if (allMode) dataUrl += (brandFilter ? '&' : '?') + 'all=1';
@@ -217,7 +194,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             .then(data => {
                 const container = document.getElementById('content');
                 if (data.promotions && data.promotions.length) {
-                    let html = `<h1>${escapeHtml(pageTitle)}</h1><div class="sub">${escapeHtml(pageSubtitle)}</div>`;
+                    let html = '';
                     data.promotions.forEach(promo => {
                         const cardClass = promo.details_missing ? 'promo-card warning' : 'promo-card';
                         const promoLink = promo.link && !promo.details_missing ? promo.link : null;
@@ -239,12 +216,12 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     });
                     container.innerHTML = html;
                 } else {
-                    container.innerHTML = `<h1>${escapeHtml(pageTitle)}</h1><div class="sub">${escapeHtml(pageSubtitle)}</div><div style="background: var(--card-bg); border-radius: 20px; padding: 40px 20px; text-align: center;">На данный момент нет активных акций</div><div class="footer">Stalker-Co — всё для профессионалов</div>`;
+                    container.innerHTML = `<div style="background: var(--card-bg); border-radius: 20px; padding: 40px 20px; text-align: center;">На данный момент нет активных акций</div>`;
                 }
             })
             .catch(error => {
                 console.error('Ошибка загрузки акций:', error);
-                document.getElementById('content').innerHTML = `<h1>${escapeHtml(pageTitle)}</h1><div class="sub">${escapeHtml(pageSubtitle)}</div><div style="background: var(--card-bg); border-radius: 20px; padding: 40px 20px; text-align: center;">Ошибка загрузки акций. Попробуйте позже.</div><div class="footer">Stalker-Co — всё для профессионалов</div>`;
+                document.getElementById('content').innerHTML = `<div style="background: var(--card-bg); border-radius: 20px; padding: 40px 20px; text-align: center;">Ошибка загрузки акций. Попробуйте позже.</div>`;
             });
     </script>
 </body>
@@ -254,6 +231,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 @app.route('/promo/<partner_code>')
 def promo_page(partner_code):
     return render_template_string(HTML_TEMPLATE)
+
+# ... остальные маршруты (/click, /promo/.../data, /health, /tg) остаются без изменений. 
+# Чтобы не дублировать, я добавлю их кратко, но в вашем полном файле они уже есть.
+# Ниже для полноты я включу их, но вы можете оставить свои существующие.
 
 @app.route('/tg')
 def tg_redirect():
@@ -308,14 +289,12 @@ def promo_data(partner_code):
     debug_mode = request.args.get('debug') == '1'
     all_mode = request.args.get('all') == '1'
     brand_filter = request.args.get('brand')
-
     logger.info(f"Запрос данных: partner={partner_code}, debug={debug_mode}, all={all_mode}, brand={brand_filter}")
 
     if debug_mode:
         promotions_list = promo_client.get_promotions_list_sync(partner_code)
         if not promotions_list:
             return jsonify({"promotions": []}), 404
-
         promo_ids = []
         promo_map = {}
         for promo in promotions_list:
@@ -323,9 +302,7 @@ def promo_data(partner_code):
             if promo_id:
                 promo_ids.append(promo_id)
                 promo_map[promo_id] = promo
-
         details_map = promo_client.get_promotion_details_batch_sync(promo_ids) if promo_ids else {}
-
         enriched = []
         for promo_id, promo in promo_map.items():
             details = details_map.get(promo_id)
@@ -366,7 +343,6 @@ def promo_data(partner_code):
     promotions_list = promo_client.get_promotions_list_sync(partner_code)
     if not promotions_list:
         return jsonify({"promotions": []}), 404
-
     promo_ids = []
     promo_map = {}
     for promo in promotions_list:
@@ -374,12 +350,9 @@ def promo_data(partner_code):
         if promo_id:
             promo_ids.append(promo_id)
             promo_map[promo_id] = promo
-
     if not promo_ids:
         return jsonify({"promotions": []}), 404
-
     details_map = promo_client.get_promotion_details_batch_sync(promo_ids)
-
     enriched = []
     for promo_id, promo in promo_map.items():
         details = details_map.get(promo_id)
