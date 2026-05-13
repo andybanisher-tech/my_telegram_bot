@@ -13,7 +13,7 @@ SEARCH_URL = os.getenv("SEARCH_URL", "https://dev.stalker-co.ru/ajax/search.php"
 LLM_SERVER_URL = os.getenv("LLM_SERVER_URL", "http://31.76.227.1:8000/v1/chat/completions")
 LLM_MODEL = os.getenv("LLM_MODEL", "cotype-nano-Q4_K_M.gguf")
 BASE_WEB_URL = os.getenv("BASE_WEB_URL", "https://news-bot-stalker.ru")
-LLM_TIMEOUT = 60  # секунд
+LLM_TIMEOUT = 60
 
 # Глобальная LLM-модель для extract_brand
 _llm_instance = None
@@ -42,20 +42,23 @@ async def handle_web_message(user_id: int, message_text: str, context: str = "",
     if any(w in text for w in ["помощ", "help", "что ты умеешь", "команд"]):
         return get_help_text()
 
-    # По умолчанию пробуем поиск товара
-    search_result = await handle_search(user_id, message_text, context)
-    if "ничего не найдено" not in search_result and "Не удалось выполнить поиск" not in search_result and search_result != "":
+    # Для всех остальных запросов сначала ищем товары
+    search_result = await handle_search(user_id, text, context)
+    # Если поиск дал результат (не ошибка и не пусто), показываем его
+    if search_result and "ничего не найдено" not in search_result and "Не удалось выполнить поиск" not in search_result:
         return search_result
 
-    # Если поиск не дал результатов – отправляем в LLM
-    return await handle_general(user_id, message_text, context)
+    # Только если поиск не дал результатов – идём в LLM
+    return await handle_general(user_id, text, context)
 
 
 async def handle_search(user_id: int, query: str, context: str) -> str:
-    # Убираем вводные слова
+    """Ищет товары через API сайта. Возвращает HTML с карточками или текст ошибки."""
+    # Очищаем запрос от вводных слов
     search_query = re.sub(r'(найди|поищи|подбери|посоветуй|хочу купить|ищу|нужен|нужна|нужно|покажи)\s*', '', query, flags=re.IGNORECASE).strip()
     if not search_query:
         search_query = query.strip()
+    
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.get(SEARCH_URL, params={"query": search_query, "limit": 3})
@@ -65,6 +68,8 @@ async def handle_search(user_id: int, query: str, context: str) -> str:
             results = data.get("results", [])
             if not results:
                 return f"По запросу «{search_query}» ничего не найдено."
+            
+            # Формируем HTML с карточками товаров
             html_parts = ['<div class="mlk-chat-products">']
             for item in results:
                 image_url = item.get("image", "")
@@ -82,14 +87,13 @@ async def handle_search(user_id: int, query: str, context: str) -> str:
             return ''.join(html_parts)
     except Exception as e:
         logger.error(f"Search error: {e}")
-        return "Произошла ошибка при поиске."
+        return ""
 
 
 async def handle_banners(user_id: int, partner_id: str = None, text: str = "") -> str:
     if not partner_id:
         return "Не указан партнёрский идентификатор. Проверьте настройки профиля."
     
-    # Определяем бренд
     brand_filter = None
     if text and _llm_instance:
         try:
@@ -105,7 +109,6 @@ async def handle_banners(user_id: int, partner_id: str = None, text: str = "") -
     if brand_filter:
         web_app_url += f"?brand={brand_filter}"
     
-    # Возвращаем HTML с кнопкой
     brand_text = f' по бренду {brand_filter}' if brand_filter else ''
     return (
         f'<div class="mlk-chat-promo-message">'
