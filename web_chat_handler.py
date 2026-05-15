@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 SEARCH_URL = os.getenv("SEARCH_URL", "https://dev.stalker-co.ru/ajax/search.php")
 LLM_SERVER_URL = os.getenv("LLM_SERVER_URL", "http://31.76.227.1:8000/v1/chat/completions")
 LLM_MODEL = os.getenv("LLM_MODEL", "cotype-nano-Q4_K_M.gguf")
-BASE_WEB_URL = os.getenv("BASE_WEB_URL", "https://news-bot-stalker.ru")
+BASE_WEB_URL = os.getenv("BASE_WEB_URL", "https://bot.stalker-co.ru")
 LLM_TIMEOUT = 60  # секунд
 
 # Глобальная LLM-модель для extract_brand
