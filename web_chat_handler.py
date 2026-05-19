@@ -10,7 +10,7 @@ import promo_client
 
 logger = logging.getLogger(__name__)
 
-SEARCH_URL    = os.getenv("SEARCH_URL",     "https://stalker-co.ru/bitrix/tools/mlk_search_ajax.php")
+SEARCH_URL    = os.getenv("SEARCH_URL",     "https://dev.stalker-co.ru/bitrix/tools/mlk_search_ajax.php")
 LLM_SERVER_URL = os.getenv("LLM_SERVER_URL", "http://31.76.227.1:8000/v1/chat/completions")
 LLM_MODEL     = os.getenv("LLM_MODEL",      "cotype-nano-Q4_K_M.gguf")
 BASE_WEB_URL  = os.getenv("BASE_WEB_URL",   "https://bot.stalker-co.ru")
