@@ -17,9 +17,15 @@ def init_db():
             first_name TEXT,
             phone TEXT,
             is_verified BOOLEAN DEFAULT 0,
+            welcome_accepted BOOLEAN DEFAULT 0,
             joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
+    # Миграция: добавляем колонку для существующих баз без неё
+    try:
+        cur.execute("ALTER TABLE users ADD COLUMN welcome_accepted BOOLEAN DEFAULT 0")
+    except Exception:
+        pass
 
     cur.execute('''
         CREATE TABLE IF NOT EXISTS categories (
@@ -165,6 +171,25 @@ def user_exists(user_id):
     exists = cur.fetchone() is not None
     conn.close()
     return exists
+
+def has_accepted_welcome(user_id):
+    conn = sqlite3.connect(DB_NAME)
+    cur = conn.cursor()
+    cur.execute('SELECT welcome_accepted FROM users WHERE user_id = ?', (user_id,))
+    row = cur.fetchone()
+    conn.close()
+    return bool(row and row[0])
+
+def accept_welcome(user_id, username, first_name):
+    conn = sqlite3.connect(DB_NAME)
+    cur = conn.cursor()
+    cur.execute('''
+        INSERT INTO users (user_id, username, first_name, welcome_accepted)
+        VALUES (?, ?, ?, 1)
+        ON CONFLICT(user_id) DO UPDATE SET welcome_accepted = 1
+    ''', (user_id, username, first_name))
+    conn.commit()
+    conn.close()
 
 def add_user(user_id, username, first_name):
     conn = sqlite3.connect(DB_NAME)
