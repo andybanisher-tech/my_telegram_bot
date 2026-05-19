@@ -6,6 +6,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 import database as db
 import soap_client
 from keyboards.common import get_main_keyboard
+from keyboards.companies import get_companies_view_keyboard
 from states import states
 import logging
 
@@ -41,11 +42,19 @@ async def refresh_companies_list(callback: types.CallbackQuery, state: FSMContex
         await callback.message.edit_text("❌ Не удалось загрузить компании. Попробуйте позже.")
         return
     db.save_user_companies(user_id, companies)
-    keyboard, error = await get_companies_keyboard(user_id, action, callback.bot)
-    if error:
-        await callback.message.edit_text(error)
+
+    if action == 'view':
+        saved = db.get_user_companies(user_id)
+        lines = ["✅ *Список компаний обновлён:*\n"]
+        for comp in saved:
+            lines.append(f"• {comp['name']} (код {comp['code']})")
+        await callback.message.edit_text("\n".join(lines), parse_mode="Markdown", reply_markup=get_companies_view_keyboard())
     else:
-        await callback.message.edit_text("✅ Список компаний обновлён. Выберите компанию:", reply_markup=keyboard)
+        keyboard, error = await get_companies_keyboard(user_id, action, callback.bot)
+        if error:
+            await callback.message.edit_text(error)
+        else:
+            await callback.message.edit_text("✅ Список компаний обновлён. Выберите компанию:", reply_markup=keyboard)
     await callback.answer()
 
 async def process_companies_loading(user_id: int, phone: str, state: FSMContext, message: types.Message, reply_chat_id: int):

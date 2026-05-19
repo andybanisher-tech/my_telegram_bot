@@ -146,6 +146,7 @@ async def handle_main_menu_callback(callback: types.CallbackQuery, state: FSMCon
     else:
         reply_chat_id = callback.message.chat.id
     await callback.answer()
+    await callback.message.delete()
 
     if data == "menu_companies":
         await show_companies(callback.message, state, reply_chat_id, user_id)
