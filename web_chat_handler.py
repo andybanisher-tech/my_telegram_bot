@@ -9,11 +9,29 @@ import promo_client
 
 logger = logging.getLogger(__name__)
 
-SEARCH_URL = os.getenv("SEARCH_URL", "https://dev.stalker-co.ru/ajax/search.php")
+SEARCH_URL = os.getenv("SEARCH_URL", "https://stalker-co.ru/bitrix/tools/mlk_search_ajax.php")
 LLM_SERVER_URL = os.getenv("LLM_SERVER_URL", "http://31.76.227.1:8000/v1/chat/completions")
 LLM_MODEL = os.getenv("LLM_MODEL", "cotype-nano-Q4_K_M.gguf")
 BASE_WEB_URL = os.getenv("BASE_WEB_URL", "https://bot.stalker-co.ru")
 LLM_TIMEOUT = 60  # секунд
+
+
+def strip_reasoning(text: str) -> str:
+    """Убирает теги <think>/reasoning и возвращает финальный ответ модели."""
+    if not text:
+        return text
+    # Закрытые блоки рассуждений
+    text = re.sub(r'<\s*(think|thinking|reason|reasoning)\s*>.*?<\s*/\s*\1\s*>', '', text, flags=re.DOTALL | re.IGNORECASE)
+    # Незакрытый блок — отрезаем с тега и всё до него
+    text = re.sub(r'<\s*(think|thinking|reason|reasoning)\s*>.*', '', text, flags=re.DOTALL | re.IGNORECASE)
+    # Markdown-ограждения
+    text = re.sub(r'```[a-z]*', '', text, flags=re.IGNORECASE)
+    text = text.replace('```', '')
+    # Типичные префиксы
+    text = re.sub(r'^\s*(ключевые слова|ответ|результат|keywords|answer)\s*[:\-–]\s*', '', text.strip(), flags=re.IGNORECASE)
+    # Берём последнюю непустую строку
+    lines = [l.strip() for l in text.split('\n') if l.strip()]
+    return lines[-1].strip(' \t"\'`«».') if lines else text.strip()
 
 # Глобальная LLM-модель для extract_brand
 _llm_instance = None
@@ -52,32 +70,41 @@ async def handle_web_message(user_id: int, message_text: str, context: str = "",
 
 
 async def handle_search(user_id: int, query: str, context: str) -> str:
-    # Убираем вводные слова
-    search_query = re.sub(r'(найди|поищи|подбери|посоветуй|хочу купить|ищу|нужен|нужна|нужно|покажи)\s*', '', query, flags=re.IGNORECASE).strip()
-    if not search_query:
-        search_query = query.strip()
+    # Убираем вводные слова, оставляем суть
+    search_query = re.sub(
+        r'(найди|поищи|подбери|посоветуй|хочу купить|ищу|нужен|нужна|нужно|покажи)\s*',
+        '', query, flags=re.IGNORECASE
+    ).strip() or query.strip()
+
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(SEARCH_URL, params={"query": search_query, "limit": 3})
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            # ai_mode=1 — поиск по смыслу (OR между словами + ранжирование)
+            resp = await client.post(SEARCH_URL, data={
+                "query": search_query,
+                "limit": 4,
+                "ai_mode": 1,
+            })
             if resp.status_code != 200:
                 return "Не удалось выполнить поиск."
             data = resp.json()
             results = data.get("results", [])
             if not results:
                 return f"По запросу «{search_query}» ничего не найдено."
+
             html_parts = ['<div class="mlk-chat-products">']
             for item in results:
                 image_url = item.get("image", "")
                 img_tag = f'<img src="{image_url}" class="mlk-chat-product-img" />' if image_url else ''
-                html_parts.append(f'''
-                <div class="mlk-chat-product">
-                    {img_tag}
-                    <div class="mlk-chat-product-info">
-                        <a href="{item.get("url", "#")}" target="_blank">{item.get("name", "")}</a>
-                        <span>{item.get("article", "")}</span>
-                    </div>
-                </div>
-                ''')
+                article = item.get("article", "")
+                article_html = f'<span>{article}</span>' if article else ''
+                html_parts.append(
+                    f'<div class="mlk-chat-product">'
+                    f'{img_tag}'
+                    f'<div class="mlk-chat-product-info">'
+                    f'<a href="{item.get("url","#")}" target="_blank">{item.get("name","")}</a>'
+                    f'{article_html}'
+                    f'</div></div>'
+                )
             html_parts.append('</div>')
             return ''.join(html_parts)
     except Exception as e:
@@ -168,7 +195,8 @@ async def handle_general(user_id: int, text: str, context: str) -> str:
                 "max_tokens": 200
             }, headers={"Content-Type": "application/json"})
             if resp.status_code == 200:
-                return resp.json()["choices"][0]["message"]["content"]
+                raw = resp.json()["choices"][0]["message"]["content"]
+                return strip_reasoning(raw)
             logger.error(f"LLM returned status {resp.status_code}: {resp.text}")
             return "Извините, не могу сейчас ответить."
     except httpx.TimeoutException:
