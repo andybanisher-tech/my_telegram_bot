@@ -1,7 +1,7 @@
 import logging
 from aiogram.types import BotCommand, BotCommandScopeDefault, BotCommandScopeChat
 import database as db
-from config import STATIC_ADMINS
+from config import STATIC_ADMINS, STATIC_MANAGERS
 
 logger = logging.getLogger(__name__)
 
@@ -21,8 +21,6 @@ async def set_bot_commands(bot):
     #BotCommand(command="send", description="✉️ Быстрая рассылка"),
 ]
     admin_full = default_commands + admin_extra
-    
-    
 
     for admin_id in STATIC_ADMINS:
         try:
@@ -36,3 +34,13 @@ async def set_bot_commands(bot):
                 await bot.set_my_commands(admin_full, scope=BotCommandScopeChat(chat_id=admin["id"]))
             except Exception as e:
                 logger.error(f"Ошибка установки команд для админа {admin['id']}: {e}")
+
+    # Явно сбрасываем команды для менеджеров до дефолтных (только /start),
+    # чтобы перекрыть возможный кэш BotCommandScopeChat от предыдущих версий бота.
+    manager_ids = set(STATIC_MANAGERS) | {m["id"] for m in db.get_db_managers()}
+    for manager_id in manager_ids:
+        if manager_id and manager_id not in STATIC_ADMINS:
+            try:
+                await bot.set_my_commands(default_commands, scope=BotCommandScopeChat(chat_id=manager_id))
+            except Exception as e:
+                logger.error(f"Ошибка установки команд для менеджера {manager_id}: {e}")
