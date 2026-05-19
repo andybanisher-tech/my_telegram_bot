@@ -1,26 +1,25 @@
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 from utils.helpers import is_manager
 
 def get_main_keyboard(user_id: int = None):
-    """Главное меню (без подписок)."""
-    buttons = [
-        [KeyboardButton(text="🏢 Мои компании")],
-        [KeyboardButton(text="🎁 Текущие акции")],
-        [KeyboardButton(text="🎁 Реферальная программа")],
-    ]
+    builder = InlineKeyboardBuilder()
+    builder.button(text="🏢 Мои компании", callback_data="menu_companies")
+    builder.button(text="🎁 Текущие акции", callback_data="menu_banners")
+    builder.button(text="🎁 Реферальная программа", callback_data="menu_bonus")
     if user_id and is_manager(user_id):
-        buttons.append([KeyboardButton(text="👥 Акции контрагента")])
-    buttons.append([KeyboardButton(text="ℹ️ Помощь")])
-    return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
+        builder.button(text="👥 Акции контрагента", callback_data="menu_partner")
+    builder.button(text="ℹ️ Помощь", callback_data="menu_help")
+    builder.adjust(1)
+    return builder.as_markup()
 
 def get_bonus_submenu_keyboard():
-    kb = [
-        [KeyboardButton(text="💰 Баланс баллов")],
-        [KeyboardButton(text="📜 История баллов")],
-        [KeyboardButton(text="◀️ Назад в главное меню")]
-    ]
-    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+    builder = InlineKeyboardBuilder()
+    builder.button(text="💰 Баланс баллов", callback_data="bonus_balance")
+    builder.button(text="📜 История баллов", callback_data="bonus_history")
+    builder.button(text="◀️ Назад в главное меню", callback_data="back_to_main")
+    builder.adjust(1)
+    return builder.as_markup()
 
 def get_phone_keyboard():
     button = KeyboardButton(text="📱 Поделиться номером", request_contact=True)

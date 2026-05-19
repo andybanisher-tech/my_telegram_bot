@@ -11,7 +11,6 @@ async def cmd_start(message: types.Message, state: FSMContext):
     await state.clear()
     user = message.from_user
     db.add_user(user.id, user.username, user.first_name)
-    await message.answer(
-        f"👋 Привет, {user.first_name}!\nВыбери действие:",
-        reply_markup=get_main_keyboard(user.id)
-    )
+    # Убираем старую reply-клавиатуру отдельным сообщением
+    await message.answer(f"👋 Привет, {user.first_name}!", reply_markup=types.ReplyKeyboardRemove())
+    await message.answer("Выбери действие:", reply_markup=get_main_keyboard(user.id))

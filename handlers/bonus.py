@@ -1,5 +1,5 @@
 import asyncio
-from aiogram import Router, types, F
+from aiogram import Router, types
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
@@ -91,12 +91,13 @@ async def fetch_and_show_history(message: types.Message, user_id: int, company_c
             await message.answer(text, parse_mode="Markdown")
     await show_bonus_submenu(message, None, message.chat.id)
 
-@router.message(F.text == "💰 Баланс баллов")
-async def bonus_balance_start(message: types.Message, state: FSMContext):
-    user_id = message.from_user.id
-    company = await show_company_selection(user_id, message, "balance")
+@router.callback_query(lambda c: c.data == "bonus_balance")
+async def bonus_balance_start(callback: types.CallbackQuery, state: FSMContext):
+    user_id = callback.from_user.id
+    await callback.answer()
+    company = await show_company_selection(user_id, callback.message, "balance")
     if company:
-        await fetch_and_show_balance(message, user_id, company['code'])
+        await fetch_and_show_balance(callback.message, user_id, company['code'])
 
 @router.callback_query(lambda c: c.data.startswith("bonus_comp_balance_"))
 async def bonus_balance_company_chosen(callback: types.CallbackQuery, state: FSMContext):
@@ -105,12 +106,13 @@ async def bonus_balance_company_chosen(callback: types.CallbackQuery, state: FSM
     await callback.answer()
     await fetch_and_show_balance(callback.message, callback.from_user.id, company_code)
 
-@router.message(F.text == "📜 История баллов")
-async def bonus_history_start(message: types.Message, state: FSMContext):
-    user_id = message.from_user.id
-    company = await show_company_selection(user_id, message, "history")
+@router.callback_query(lambda c: c.data == "bonus_history")
+async def bonus_history_start(callback: types.CallbackQuery, state: FSMContext):
+    user_id = callback.from_user.id
+    await callback.answer()
+    company = await show_company_selection(user_id, callback.message, "history")
     if company:
-        await fetch_and_show_history(message, user_id, company['code'])
+        await fetch_and_show_history(callback.message, user_id, company['code'])
 
 @router.callback_query(lambda c: c.data.startswith("bonus_comp_history_"))
 async def bonus_history_company_chosen(callback: types.CallbackQuery, state: FSMContext):
