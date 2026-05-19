@@ -24,7 +24,7 @@ from states import states, BalanceSelecting, HistorySelecting, BannersSelecting
 logger = logging.getLogger(__name__)
 router = Router()
 
-BASE_WEB_URL = os.getenv("BASE_WEB_URL", "https://news-bot-stalker.ru")
+BASE_WEB_URL = os.getenv("BASE_WEB_URL", "https://bot.stalker-co.ru")
 
 async def show_main_menu(chat_id: int, user_id: int, bot):
     await bot.send_message(chat_id, "Главное меню:", reply_markup=get_main_keyboard(user_id))
