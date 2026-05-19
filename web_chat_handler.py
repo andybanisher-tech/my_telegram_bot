@@ -182,26 +182,58 @@ def get_help_text() -> str:
     )
 
 
+_SYSTEM_PROMPT = (
+    "Ты — помощник интернет-магазина профессиональной косметики. "
+    "Клиент написал запрос, но подходящий товар не найден. "
+    "Твоя задача — задать ОДИН короткий уточняющий вопрос, чтобы понять что именно нужно. "
+    "Правила: "
+    "1. Только один вопрос — не два и не три. "
+    "2. Не рассуждай, не объясняй, не извиняйся. "
+    "3. Не отвечай на темы, не связанные с товарами магазина. "
+    "4. Вопрос должен уточнять: тип товара, бренд, назначение или тип кожи/волос. "
+    "Примеры правильных ответов: "
+    "«Для какого типа кожи ищете крем?» "
+    "«Какой бренд предпочитаете или не важно?» "
+    "«Это для ухода за волосами или кожей лица?» "
+    "«Ищете профессиональную краску или для домашнего использования?»"
+)
+
+
 async def handle_general(user_id: int, text: str, context: str) -> str:
-    url = LLM_SERVER_URL
-    model = LLM_MODEL
-    prompt = f"Клиент (ID {user_id}). Контекст: {context}. Вопрос: {text}"
     try:
         async with httpx.AsyncClient(timeout=LLM_TIMEOUT) as client:
-            resp = await client.post(url, json={
-                "model": model,
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.5,
-                "max_tokens": 200
+            resp = await client.post(LLM_SERVER_URL, json={
+                "model": LLM_MODEL,
+                "messages": [
+                    {"role": "system", "content": _SYSTEM_PROMPT},
+                    {"role": "user", "content": text},
+                ],
+                "temperature": 0.2,
+                "max_tokens": 80,
             }, headers={"Content-Type": "application/json"})
             if resp.status_code == 200:
                 raw = resp.json()["choices"][0]["message"]["content"]
-                return strip_reasoning(raw)
+                answer = strip_reasoning(raw)
+                if not answer or len(answer) < 5:
+                    return _fallback_question(text)
+                return answer
             logger.error(f"LLM returned status {resp.status_code}: {resp.text}")
-            return "Извините, не могу сейчас ответить."
+            return _fallback_question(text)
     except httpx.TimeoutException:
         logger.error("LLM timeout")
-        return "Сервер временно перегружен, пожалуйста, попробуйте позже."
+        return _fallback_question(text)
     except Exception as e:
         logger.error(f"LLM error: {e}")
-        return "Извините, произошла ошибка."
+        return _fallback_question(text)
+
+
+def _fallback_question(text: str) -> str:
+    """Статический вопрос когда LLM недоступен или вернул пустой ответ."""
+    text_lower = text.lower()
+    if any(w in text_lower for w in ["волос", "шампун", "маск", "бальзам", "кондиц"]):
+        return "Уточните, пожалуйста: для какого типа волос ищете средство?"
+    if any(w in text_lower for w in ["крем", "сыворотк", "тоник", "лосьон", "уход"]):
+        return "Уточните, пожалуйста: для какого типа кожи подбираете средство?"
+    if any(w in text_lower for w in ["краск", "окраш", "цвет"]):
+        return "Уточните, пожалуйста: профессиональная краска или для домашнего использования?"
+    return "Уточните, пожалуйста: какой тип товара вас интересует или какой бренд предпочитаете?"
