@@ -39,7 +39,7 @@ for _line in _CATEGORIES_RAW.strip().splitlines():
 _sessions: dict[int, dict] = {}
 
 _MAX_HISTORY        = 8   # сообщений в истории для LLM
-_MAX_CLARIFICATIONS = 3   # попыток уточнить до сдачи
+_MAX_CLARIFICATIONS = 1   # одна попытка уточнить, потом — категории
 
 _SEARCH_INTRO_RE = re.compile(
     r'^(найди|поищи|подбери|посоветуй|хочу купить|ищу|нужен|нужна|нужно|покажи)\s+',
@@ -83,18 +83,6 @@ def _strip_intro(text: str) -> str:
 
 # ── LLM helpers ───────────────────────────────────────────────────────────────
 
-_SYSTEM_PROMPT = (
-    "Ты — помощник интернет-магазина профессиональной косметики. "
-    "Товар по запросу клиента не найден — запрос слишком короткий или неточный. "
-    "Задай ОДИН открытый вопрос: попроси клиента описать подробнее что именно он ищет. "
-    "Правила: "
-    "1. Один вопрос — не два и не три. "
-    "2. Вопрос должен быть открытым — пусть клиент сам опишет товар своими словами. "
-    "3. Не угадывай назначение, не сужай ответ вариантами. "
-    "4. Не рассуждай, не объясняй, не извиняйся. "
-    "5. Учитывай историю переписки — не спрашивай то, что уже сказано. "
-    "Шаблон ответа: «Уточните, пожалуйста: [открытый вопрос о товаре]?»"
-)
 
 
 def strip_reasoning(text: str) -> str:
@@ -109,44 +97,36 @@ def strip_reasoning(text: str) -> str:
     return lines[-1].strip(' \t"\'`«».') if lines else text.strip()
 
 
-def _fallback_question(context_query: str) -> str:
-    return "Уточните, пожалуйста: опишите подробнее что именно ищете — для чего, какой результат нужен?"
+def _clarification_question(pending_search: str) -> str:
+    """
+    Единственный уточняющий вопрос после неудачного поиска.
+    Спрашиваем только то, ответ на что станет поисковым словом:
+    тип товара или бренд.
+    """
+    q = pending_search.lower()
+
+    # Если тип товара уже понятен из запроса — спрашиваем бренд
+    product_types = ['крем', 'маск', 'сыворотк', 'тоник', 'лосьон', 'шампун',
+                     'бальзам', 'кондиц', 'краск', 'тушь', 'помад', 'тональн',
+                     'скраб', 'пилинг', 'сыворот', 'ампул', 'спрей', 'мусс',
+                     'гель', 'пенк', 'мицеллярн', 'расческ', 'щетк']
+    type_found = any(t in q for t in product_types)
+
+    if type_found:
+        return (
+            "Какой бренд предпочитаете? Например: Matrix, Wella, Kerastase, Vichy, "
+            "La Roche-Posay — или напишите свой."
+        )
+    else:
+        return (
+            "Уточните тип товара: крем, маска, сыворотка, шампунь, краска — "
+            "или другое?"
+        )
 
 
 async def _ask_clarification(user_id: int, current_text: str) -> str:
-    """Отправляет историю разговора в LLM и получает уточняющий вопрос."""
     s = _session(user_id)
-    # История без последнего сообщения (оно уже добавлено в _add_msg раньше)
-    history = s['messages'][:-1]
-
-    messages = [{"role": "system", "content": _SYSTEM_PROMPT}]
-    # Фильтруем HTML из истории — модели нужен только текст
-    for m in history:
-        content = m['content']
-        if content.startswith('<'):
-            content = '[результаты поиска показаны]'
-        messages.append({"role": m['role'], "content": content})
-    messages.append({"role": "user", "content": current_text})
-
-    try:
-        async with httpx.AsyncClient(timeout=LLM_TIMEOUT) as client:
-            resp = await client.post(LLM_SERVER_URL, json={
-                "model":       LLM_MODEL,
-                "messages":    messages,
-                "temperature": 0.2,
-                "max_tokens":  80,
-            }, headers={"Content-Type": "application/json"})
-            if resp.status_code == 200:
-                raw    = resp.json()["choices"][0]["message"]["content"]
-                answer = strip_reasoning(raw)
-                if answer and len(answer) >= 5:
-                    return answer
-    except httpx.TimeoutException:
-        logger.error("LLM timeout in _ask_clarification")
-    except Exception as e:
-        logger.error(f"LLM error in _ask_clarification: {e}")
-
-    return _fallback_question(s.get('pending_search') or current_text)
+    return _clarification_question(s.get('pending_search') or current_text)
 
 
 def _show_categories(accumulated_query: str) -> str:
@@ -398,6 +378,6 @@ def get_help_text() -> str:
     )
 
 
-# handle_general оставлен как алиас для совместимости с внешними вызовами
 async def handle_general(user_id: int, text: str, context: str) -> str:
+    """Алиас для совместимости с внешними вызовами."""
     return await _ask_clarification(user_id, text)
