@@ -158,6 +158,14 @@ def delete_category(name):
         conn.close()
     return success
 
+def user_exists(user_id):
+    conn = sqlite3.connect(DB_NAME)
+    cur = conn.cursor()
+    cur.execute('SELECT 1 FROM users WHERE user_id = ?', (user_id,))
+    exists = cur.fetchone() is not None
+    conn.close()
+    return exists
+
 def add_user(user_id, username, first_name):
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
