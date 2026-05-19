@@ -29,8 +29,12 @@ async def cmd_start(message: types.Message, state: FSMContext):
     await state.clear()
     user = message.from_user
 
-    if not db.user_exists(user.id):
-        await message.answer(WELCOME_TEXT, reply_markup=get_welcome_keyboard(), disable_web_page_preview=True)
+    if not db.has_accepted_welcome(user.id):
+        await message.answer(
+            WELCOME_TEXT,
+            reply_markup=get_welcome_keyboard(),
+            disable_web_page_preview=True
+        )
         return
 
     await message.answer("👋 С возвращением!", reply_markup=types.ReplyKeyboardRemove())
@@ -39,7 +43,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
 @router.callback_query(lambda c: c.data == "welcome_accept")
 async def welcome_accept(callback: types.CallbackQuery, state: FSMContext):
     user = callback.from_user
-    db.add_user(user.id, user.username, user.first_name)
+    db.accept_welcome(user.id, user.username, user.first_name)
     await callback.message.edit_text("✅ Добро пожаловать!", reply_markup=None)
     await callback.bot.send_message(
         callback.message.chat.id,
