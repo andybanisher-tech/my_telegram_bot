@@ -11,8 +11,9 @@ router = Router()
 class PartnerActions(StatesGroup):
     waiting_for_partner_id = State()
 
-async def partner_actions_start(message: types.Message, state: FSMContext):
-    user_id = message.from_user.id
+async def partner_actions_start(message: types.Message, state: FSMContext, user_id: int = None):
+    if user_id is None:
+        user_id = message.from_user.id
     if not is_manager(user_id):
         await message.answer("⛔ У вас нет прав для этой команды.")
         return

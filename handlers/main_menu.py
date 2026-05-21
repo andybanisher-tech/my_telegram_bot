@@ -158,7 +158,7 @@ async def handle_main_menu_callback(callback: types.CallbackQuery, state: FSMCon
         if not is_manager(user_id):
             await callback.bot.send_message(reply_chat_id, "⛔ У вас нет прав для этой команды.")
             return
-        await partner_actions_start(callback.message, state)
+        await partner_actions_start(callback.message, state, user_id=user_id)
     elif data == "menu_help":
         await show_help(callback.message, state, reply_chat_id, user_id)
 
