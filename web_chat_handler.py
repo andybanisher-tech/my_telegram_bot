@@ -272,34 +272,54 @@ async def handle_web_message(user_id: int, message_text: str, context: str = "",
 # ── Поиск товаров ─────────────────────────────────────────────────────────────
 
 async def handle_search(user_id: int, query: str, context: str) -> str:
+    """
+    Поиск через RAG-эндпоинт Bitrix.
+    Backend Bitrix берёт на себя весь pipeline (bge-m3 embed → cosine → cotype-nano rerank).
+    Возвращает HTML с карточками товаров + обоснованием LLM.
+    """
     search_query = _SEARCH_INTRO_RE.sub('', query.strip()).strip() or query.strip()
 
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
             resp = await client.post(SEARCH_URL, data={
                 "query":   search_query,
-                "limit":   4,
+                "limit":   5,
                 "ai_mode": 1,
             })
             if resp.status_code != 200:
                 return "Не удалось выполнить поиск."
             data    = resp.json()
-            results = data.get("results", [])
+            # Берём только товары (категории/марки/гаммы в чате не показываем).
+            results = [it for it in data.get("results", []) if (it.get("type") or "product") == "product"]
             if not results:
                 return f"По запросу «{search_query}» ничего не найдено."
 
-            html_parts = ['<div class="mlk-chat-products">']
+            # Если LLM сделала выбор с обоснованием — показываем только его,
+            # иначе fallback на top-3 по cosine.
+            picked = [r for r in results if r.get("reason") or r.get("picked")]
+            if picked:
+                results = picked
+                intro = "Подобрал для вас:"
+            else:
+                results = results[:3]
+                intro = "Возможно подойдёт:"
+
+            html_parts = [f'<p>{intro}</p>', '<div class="mlk-chat-products">']
             for item in results:
                 image_url    = item.get("image", "")
                 img_tag      = f'<img src="{image_url}" class="mlk-chat-product-img" />' if image_url else ''
-                article      = item.get("article", "")
-                article_html = f'<span>{article}</span>' if article else ''
+                reason       = item.get("reason", "")
+                reason_html  = (
+                    f'<span class="mlk-chat-product-reason">{_escape_html(reason)}</span>'
+                    if reason else ""
+                )
+                ai_badge     = '<span class="mlk-item-ai-badge">AI</span> ' if item.get("picked") else ''
                 html_parts.append(
                     f'<div class="mlk-chat-product">'
                     f'{img_tag}'
                     f'<div class="mlk-chat-product-info">'
-                    f'<a href="{item.get("url","#")}" target="_blank">{item.get("name","")}</a>'
-                    f'{article_html}'
+                    f'<a href="{item.get("url","#")}" target="_blank">{ai_badge}{_escape_html(item.get("name",""))}</a>'
+                    f'{reason_html}'
                     f'</div></div>'
                 )
             html_parts.append('</div>')
@@ -307,6 +327,16 @@ async def handle_search(user_id: int, query: str, context: str) -> str:
     except Exception as e:
         logger.error(f"Search error: {e}")
         return "Произошла ошибка при поиске."
+
+
+def _escape_html(s: str) -> str:
+    return (
+        str(s)
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+    )
 
 
 # ── Прочие обработчики ────────────────────────────────────────────────────────
