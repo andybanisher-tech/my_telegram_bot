@@ -276,11 +276,14 @@ async def handle_search(user_id: int, query: str, context: str) -> str:
     Поиск через RAG-эндпоинт Bitrix.
     Backend Bitrix берёт на себя весь pipeline (bge-m3 embed → cosine → cotype-nano rerank).
     Возвращает HTML с карточками товаров + обоснованием LLM.
+
+    Таймаут увеличен до 90 сек: cotype-nano-Q4 на 4 vCPU может думать 30-60 сек
+    при rerank с обоснованием.
     """
     search_query = _SEARCH_INTRO_RE.sub('', query.strip()).strip() or query.strip()
 
     try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
+        async with httpx.AsyncClient(timeout=90.0) as client:
             resp = await client.post(SEARCH_URL, data={
                 "query":   search_query,
                 "limit":   5,
@@ -324,8 +327,14 @@ async def handle_search(user_id: int, query: str, context: str) -> str:
                 )
             html_parts.append('</div>')
             return ''.join(html_parts)
+    except httpx.TimeoutException as e:
+        logger.error(f"Search timeout (90s exceeded): query={search_query!r}; {type(e).__name__}: {e}")
+        return "Поиск занял слишком много времени, попробуйте уточнить запрос."
+    except httpx.HTTPError as e:
+        logger.error(f"Search HTTP error: query={search_query!r}; {type(e).__name__}: {e}")
+        return "Не удалось связаться с поиском."
     except Exception as e:
-        logger.error(f"Search error: {e}")
+        logger.exception(f"Search error: query={search_query!r}; {type(e).__name__}: {e}")
         return "Произошла ошибка при поиске."
 
 
