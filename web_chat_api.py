@@ -15,7 +15,8 @@ class ChatRequest(BaseModel):
     user_id: int = 0
     message: str
     context: str = ""
-    partner_id: str = None   # новое поле для акций
+    partner_id: str = None   # для акций
+    no_products: int = 0     # 1 = фронт сам подгрузит карточки, не дублируй
 
 @app.post("/chat")
 async def chat_endpoint(req: ChatRequest):
@@ -23,7 +24,8 @@ async def chat_endpoint(req: ChatRequest):
         user_id=req.user_id,
         message_text=req.message,
         context=req.context,
-        partner_id=req.partner_id   # передаём в обработчик
+        partner_id=req.partner_id,
+        no_products=bool(req.no_products),
     )
     return {"response": reply}
 

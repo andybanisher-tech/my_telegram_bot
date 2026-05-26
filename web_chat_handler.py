@@ -178,7 +178,19 @@ except Exception as e:
 
 # ── Основной обработчик ────────────────────────────────────────────────────────
 
-async def handle_web_message(user_id: int, message_text: str, context: str = "", partner_id: str = None) -> str:
+async def handle_web_message(
+    user_id: int,
+    message_text: str,
+    context: str = "",
+    partner_id: str = None,
+    no_products: bool = False,
+) -> str:
+    """
+    Основной обработчик чат-сообщений.
+    no_products=True означает, что фронт сам подгрузит карточки через RAG-эндпоинт,
+    и нам не надо их дублировать. В таком случае на товарные запросы возвращаем
+    короткое текстовое сопровождение или пустоту.
+    """
     text       = message_text.strip()
     text_lower = text.lower()
 
@@ -226,6 +238,14 @@ async def handle_web_message(user_id: int, message_text: str, context: str = "",
     # ── Если явно новый поиск — сбрасываем предыдущий контекст ───────────────
     if _SEARCH_INTRO_RE.match(text) and s['pending_search']:
         _reset_search(user_id)
+
+    # Если фронт сам отрисует карточки (no_products) — возвращаем пустоту,
+    # чтобы не было дубля. Уточняющие вопросы и обработка явных команд
+    # остаются (они текстовые, не дублируются).
+    if no_products:
+        _reset_search(user_id)
+        _add_msg(user_id, 'assistant', '[делегировано фронту]')
+        return ""
 
     # ── Режим ожидания ответа на уточняющий вопрос ────────────────────────────
     if s['pending_search']:
@@ -302,12 +322,22 @@ async def handle_search(user_id: int, query: str, context: str) -> str:
             picked = [r for r in results if r.get("reason") or r.get("picked")]
             if picked:
                 results = picked
-                intro = "Подобрал для вас:"
             else:
                 results = results[:3]
-                intro = "Возможно подойдёт:"
 
-            html_parts = [f'<p>{intro}</p>', '<div class="mlk-chat-products">']
+            # Intro — текст LLM-вступления, иначе короткая стандартная подводка.
+            rag_meta = data.get("rag") or {}
+            intro_text = (rag_meta.get("intro") or "").strip()
+            if not intro_text:
+                intro_text = "Подобрал для вас:" if picked else "Возможно подойдёт:"
+
+            # Многоабзацное вступление → отдельные <p>.
+            intro_html = ""
+            for para in [p.strip() for p in intro_text.split("\n\n") if p.strip()]:
+                safe = _escape_html(para).replace("\n", "<br>")
+                intro_html += f'<p class="mlk-chat-intro">{safe}</p>'
+
+            html_parts = [intro_html, '<div class="mlk-chat-products">']
             for item in results:
                 image_url    = item.get("image", "")
                 img_tag      = f'<img src="{image_url}" class="mlk-chat-product-img" />' if image_url else ''
