@@ -80,6 +80,16 @@ async def show_banners(message: types.Message, state: FSMContext, brand: str = N
         reply_chat_id = message.chat.id
     if user_id is None:
         user_id = message.from_user.id
+    companies = db.get_user_companies(user_id)
+    if not companies:
+        await message.bot.send_message(
+            reply_chat_id,
+            "У вас нет выбранных компаний. Сначала выберите компании в разделе «Мои компании»."
+        )
+        return
+    if len(companies) == 1:
+        await fetch_and_show_banners(message, user_id, companies[0]['code'], brand)
+        return
     keyboard, error = await get_companies_keyboard(user_id, "banners", message.bot)
     if error:
         await message.bot.send_message(reply_chat_id, error)
