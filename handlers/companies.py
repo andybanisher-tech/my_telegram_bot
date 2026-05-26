@@ -24,7 +24,7 @@ async def get_companies_keyboard(user_id: int, action: str, bot=None):
     builder = InlineKeyboardBuilder()
     for comp in companies:
         builder.button(text=comp['name'], callback_data=f"{action}_comp_{comp['code']}")
-    builder.button(text="🔄 Обновить список", callback_data=f"refresh_companies_{action}")
+    builder.button(text="🔄 Обновить / изменить список", callback_data=f"refresh_companies_{action}")
     builder.button(text="◀️ Отмена", callback_data="back_to_main")
     builder.adjust(1)
     return builder.as_markup(), None
@@ -54,22 +54,18 @@ async def refresh_companies_list(callback: types.CallbackQuery, state: FSMContex
         await callback.message.edit_text("❌ Не удалось загрузить компании. Попробуйте позже.")
         return
 
-    if action == 'view':
-        selected_codes = [comp['code'] for comp in companies]
-        await state.update_data(available_companies=companies, selected_codes=selected_codes)
-        await state.set_state(CompanyProcess.selecting_companies)
-        keyboard = get_company_multi_selection_keyboard(companies, selected_codes)
-        await callback.message.edit_text(
-            "Отметьте нужные компании и нажмите «Сохранить»:",
-            reply_markup=keyboard
-        )
-    else:
-        db.save_user_companies(user_id, companies)
-        keyboard, error = await get_companies_keyboard(user_id, action, callback.bot)
-        if error:
-            await callback.message.edit_text(error)
-        else:
-            await callback.message.edit_text("✅ Список компаний обновлён. Выберите компанию:", reply_markup=keyboard)
+    selected_codes = [comp['code'] for comp in companies]
+    await state.update_data(
+        available_companies=companies,
+        selected_codes=selected_codes,
+        next_action=action,
+    )
+    await state.set_state(CompanyProcess.selecting_companies)
+    keyboard = get_company_multi_selection_keyboard(companies, selected_codes)
+    await callback.message.edit_text(
+        "Отметьте нужные компании и нажмите «Сохранить»:",
+        reply_markup=keyboard
+    )
     await callback.answer()
 
 @router.callback_query(lambda c: c.data.startswith('toggle_comp_'), CompanyProcess.selecting_companies)
@@ -94,6 +90,7 @@ async def save_companies_selection(callback: types.CallbackQuery, state: FSMCont
     data = await state.get_data()
     companies = data['available_companies']
     selected_codes = data['selected_codes']
+    next_action = data.get('next_action', 'view')
     user_id = callback.from_user.id
 
     if not selected_codes:
@@ -103,16 +100,51 @@ async def save_companies_selection(callback: types.CallbackQuery, state: FSMCont
     selected = [c for c in companies if c['code'] in selected_codes]
     db.save_user_companies(user_id, selected)
     await state.clear()
-
-    lines = ["✅ *Выбранные компании сохранены:*\n"]
-    for comp in selected:
-        lines.append(f"• {comp['name']} (код {comp['code']})")
-    await callback.message.edit_text(
-        "\n".join(lines),
-        parse_mode="Markdown",
-        reply_markup=get_companies_view_keyboard()
-    )
     await callback.answer("Сохранено!")
+
+    if next_action == 'view':
+        lines = ["✅ *Выбранные компании сохранены:*\n"]
+        for comp in selected:
+            lines.append(f"• {comp['name']} (код {comp['code']})")
+        await callback.message.edit_text(
+            "\n".join(lines),
+            parse_mode="Markdown",
+            reply_markup=get_companies_view_keyboard()
+        )
+        return
+
+    # Возврат к исходному действию (balance / history / banners)
+    if len(selected) == 1:
+        await callback.message.delete()
+        company_code = selected[0]['code']
+        if next_action == 'balance':
+            from handlers.bonus import fetch_and_show_balance
+            await fetch_and_show_balance(callback.message, user_id, company_code)
+        elif next_action == 'history':
+            from handlers.bonus import fetch_and_show_history
+            await fetch_and_show_history(callback.message, user_id, company_code)
+        elif next_action == 'banners':
+            from handlers.banners import fetch_and_show_banners
+            brand_filter = data.get('brand_filter')
+            await fetch_and_show_banners(callback.message, user_id, company_code, brand_filter)
+        return
+
+    keyboard, error = await get_companies_keyboard(user_id, next_action, callback.bot)
+    if error:
+        await callback.message.edit_text(error)
+        return
+
+    from states import BalanceSelecting, HistorySelecting, BannersSelecting
+    state_map = {
+        'balance': BalanceSelecting.company,
+        'history': HistorySelecting.company,
+        'banners': BannersSelecting.company,
+    }
+    if next_action in state_map:
+        await state.set_state(state_map[next_action])
+        if next_action == 'banners' and data.get('brand_filter') is not None:
+            await state.update_data(brand_filter=data['brand_filter'])
+    await callback.message.edit_text("✅ Список обновлён. Выберите компанию:", reply_markup=keyboard)
 
 async def process_companies_loading(user_id: int, phone: str, state: FSMContext, message: types.Message, reply_chat_id: int):
     await message.bot.send_message(reply_chat_id, "⏳ Загружаем список компаний...")
