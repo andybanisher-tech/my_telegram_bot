@@ -71,6 +71,18 @@ def init_db():
     ''')
 
     cur.execute('''
+        CREATE TABLE IF NOT EXISTS role_requests (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            username TEXT,
+            first_name TEXT,
+            role TEXT,
+            status TEXT DEFAULT 'pending',
+            requested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
+    cur.execute('''
         CREATE TABLE IF NOT EXISTS promo_clicks (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER,
@@ -388,6 +400,77 @@ def log_promo_click(user_id, promo_id, promo_name):
     ''', (user_id, promo_id, promo_name))
     conn.commit()
     conn.close()
+
+# ---------- Заявки на роли ----------
+
+def add_role_request(user_id, username, first_name, role):
+    """Добавляет заявку. Возвращает True если добавлена, False если уже есть pending."""
+    conn = sqlite3.connect(DB_NAME)
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT id FROM role_requests WHERE user_id = ? AND role = ? AND status = 'pending'",
+        (user_id, role)
+    )
+    if cur.fetchone():
+        conn.close()
+        return False
+    cur.execute(
+        'INSERT INTO role_requests (user_id, username, first_name, role) VALUES (?, ?, ?, ?)',
+        (user_id, username, first_name, role)
+    )
+    conn.commit()
+    conn.close()
+    return True
+
+def get_pending_requests(role):
+    conn = sqlite3.connect(DB_NAME)
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT id, user_id, username, first_name, requested_at FROM role_requests "
+        "WHERE status = 'pending' AND role = ? ORDER BY requested_at",
+        (role,)
+    )
+    rows = cur.fetchall()
+    conn.close()
+    return [
+        {'id': r[0], 'user_id': r[1], 'username': r[2], 'first_name': r[3], 'requested_at': r[4]}
+        for r in rows
+    ]
+
+def get_pending_count(role):
+    conn = sqlite3.connect(DB_NAME)
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT COUNT(*) FROM role_requests WHERE status = 'pending' AND role = ?",
+        (role,)
+    )
+    count = cur.fetchone()[0]
+    conn.close()
+    return count
+
+def get_request_by_id(request_id):
+    conn = sqlite3.connect(DB_NAME)
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT id, user_id, username, first_name, role, status FROM role_requests WHERE id = ?",
+        (request_id,)
+    )
+    row = cur.fetchone()
+    conn.close()
+    if not row:
+        return None
+    return {
+        'id': row[0], 'user_id': row[1], 'username': row[2],
+        'first_name': row[3], 'role': row[4], 'status': row[5]
+    }
+
+def update_request_status(request_id, status):
+    conn = sqlite3.connect(DB_NAME)
+    cur = conn.cursor()
+    cur.execute("UPDATE role_requests SET status = ? WHERE id = ?", (status, request_id))
+    conn.commit()
+    conn.close()
+
 
 def get_stats():
     conn = sqlite3.connect(DB_NAME)

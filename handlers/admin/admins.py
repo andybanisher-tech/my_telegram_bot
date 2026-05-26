@@ -6,11 +6,21 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import BotCommand, BotCommandScopeChat
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 import database as db
-from config import STATIC_ADMINS
+from config import STATIC_ADMINS, BOT_USERNAME
 from utils.helpers import is_admin
 
 router = Router()
 logger = logging.getLogger(__name__)
+
+ADMIN_BOT_COMMANDS = [
+    BotCommand(command="admin", description="📢 Создать новость"),
+    BotCommand(command="stats", description="📊 Статистика"),
+    BotCommand(command="categories", description="🏷️ Управление категориями"),
+    BotCommand(command="manage_admins", description="👥 Управление админами"),
+    BotCommand(command="manage_managers", description="👥 Управление менеджерами"),
+    BotCommand(command="send", description="✉️ Быстрая рассылка"),
+    BotCommand(command="cancel", description="❌ Отмена процесса"),
+]
 
 class AdminManagement(StatesGroup):
     choosing_action = State()
@@ -19,13 +29,40 @@ class AdminManagement(StatesGroup):
     choosing_admin_to_remove = State()
 
 def get_admin_management_keyboard():
+    pending = db.get_pending_count('admin')
     builder = InlineKeyboardBuilder()
     builder.button(text="➕ Добавить администратора", callback_data="admin_add")
     builder.button(text="➖ Удалить администратора", callback_data="admin_remove")
     builder.button(text="📋 Список администраторов", callback_data="admin_list")
+    badge = f" ({pending})" if pending else ""
+    builder.button(text=f"📥 Заявки на администратора{badge}", callback_data="areq_list")
+    builder.button(text="🔗 Ссылка-приглашение", callback_data="areq_invite")
     builder.button(text="◀️ Назад", callback_data="admin_back")
     builder.adjust(1)
     return builder.as_markup()
+
+def get_admin_requests_keyboard():
+    requests = db.get_pending_requests('admin')
+    builder = InlineKeyboardBuilder()
+    for req in requests:
+        name = req['first_name'] or '—'
+        if len(name) > 12:
+            name = name[:11] + "…"
+        builder.button(text=f"✅ {name}", callback_data=f"req_approve_a_{req['id']}")
+        builder.button(text=f"❌ {name}", callback_data=f"req_reject_a_{req['id']}")
+    builder.button(text="◀️ Назад", callback_data="areq_back")
+    sizes = [2] * len(requests) + [1]
+    builder.adjust(*sizes)
+    return builder.as_markup()
+
+def _render_admin_requests_text(requests):
+    if not requests:
+        return "📥 *Заявок на роль администратора нет.*"
+    lines = ["📥 *Заявки на роль администратора:*\n"]
+    for i, req in enumerate(requests, 1):
+        username = f"@{req['username']}" if req['username'] else "без username"
+        lines.append(f"{i}. {req['first_name']} ({username})\n   ID: `{req['user_id']}`")
+    return "\n".join(lines)
 
 def get_admins_list_keyboard(static_admins):
     admins = db.get_db_admins()
@@ -214,3 +251,105 @@ async def admin_cancel(callback: types.CallbackQuery, state: FSMContext):
         reply_markup=get_admin_management_keyboard()
     )
     await callback.answer()
+
+# ---------- Заявки на роль администратора ----------
+
+@router.callback_query(lambda c: c.data == "areq_invite")
+async def admin_invite_link(callback: types.CallbackQuery, state: FSMContext):
+    if not is_admin(callback.from_user.id):
+        await callback.answer("Недоступно")
+        return
+    link = f"https://t.me/{BOT_USERNAME}?start=request_admin"
+    text = (
+        "🔗 *Ссылка-приглашение для администраторов:*\n\n"
+        f"`{link}`\n\n"
+        "Отправьте эту ссылку будущему администратору. Когда он по ней перейдёт, "
+        "его заявка появится в разделе «📥 Заявки на администратора»."
+    )
+    builder = InlineKeyboardBuilder()
+    builder.button(text="◀️ Назад", callback_data="areq_back")
+    await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=builder.as_markup(), disable_web_page_preview=True)
+    await callback.answer()
+
+@router.callback_query(lambda c: c.data == "areq_list")
+async def admin_requests_list(callback: types.CallbackQuery, state: FSMContext):
+    if not is_admin(callback.from_user.id):
+        await callback.answer("Недоступно")
+        return
+    requests = db.get_pending_requests('admin')
+    await callback.message.edit_text(
+        _render_admin_requests_text(requests),
+        parse_mode="Markdown",
+        reply_markup=get_admin_requests_keyboard()
+    )
+    await callback.answer()
+
+@router.callback_query(lambda c: c.data == "areq_back")
+async def admin_requests_back(callback: types.CallbackQuery, state: FSMContext):
+    if not is_admin(callback.from_user.id):
+        await callback.answer("Недоступно")
+        return
+    await state.set_state(AdminManagement.choosing_action)
+    await callback.message.edit_text(
+        "Управление администраторами. Выберите действие:",
+        reply_markup=get_admin_management_keyboard()
+    )
+    await callback.answer()
+
+@router.callback_query(lambda c: c.data.startswith("req_approve_a_"))
+async def admin_request_approve(callback: types.CallbackQuery, state: FSMContext):
+    if not is_admin(callback.from_user.id):
+        await callback.answer("Недоступно")
+        return
+    request_id = int(callback.data.rsplit('_', 1)[1])
+    req = db.get_request_by_id(request_id)
+    if not req or req['role'] != 'admin' or req['status'] != 'pending':
+        await callback.answer("Заявка уже обработана.", show_alert=True)
+        await _refresh_admin_requests(callback)
+        return
+    name = req['first_name'] or (f"@{req['username']}" if req['username'] else str(req['user_id']))
+    db.add_admin(req['user_id'], name)
+    db.update_request_status(request_id, 'approved')
+    try:
+        await callback.bot.set_my_commands(ADMIN_BOT_COMMANDS, scope=BotCommandScopeChat(chat_id=req['user_id']))
+    except Exception as e:
+        logger.error(f"Не удалось установить команды для нового админа {req['user_id']}: {e}")
+    try:
+        await callback.bot.send_message(
+            req['user_id'],
+            "✅ Ваша заявка на роль администратора одобрена! Вам стали доступны команды /manage_admins, /manage_managers и др."
+        )
+    except Exception as e:
+        logger.error(f"Не удалось уведомить пользователя {req['user_id']}: {e}")
+    await callback.answer(f"Одобрен: {name}")
+    await _refresh_admin_requests(callback)
+
+@router.callback_query(lambda c: c.data.startswith("req_reject_a_"))
+async def admin_request_reject(callback: types.CallbackQuery, state: FSMContext):
+    if not is_admin(callback.from_user.id):
+        await callback.answer("Недоступно")
+        return
+    request_id = int(callback.data.rsplit('_', 1)[1])
+    req = db.get_request_by_id(request_id)
+    if not req or req['role'] != 'admin' or req['status'] != 'pending':
+        await callback.answer("Заявка уже обработана.", show_alert=True)
+        await _refresh_admin_requests(callback)
+        return
+    db.update_request_status(request_id, 'rejected')
+    try:
+        await callback.bot.send_message(
+            req['user_id'],
+            "❌ Ваша заявка на роль администратора отклонена."
+        )
+    except Exception as e:
+        logger.error(f"Не удалось уведомить пользователя {req['user_id']}: {e}")
+    await callback.answer("Отклонено")
+    await _refresh_admin_requests(callback)
+
+async def _refresh_admin_requests(callback: types.CallbackQuery):
+    requests = db.get_pending_requests('admin')
+    await callback.message.edit_text(
+        _render_admin_requests_text(requests),
+        parse_mode="Markdown",
+        reply_markup=get_admin_requests_keyboard()
+    )
