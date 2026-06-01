@@ -1,5 +1,6 @@
 import re
 import time
+import asyncio
 import logging
 import os
 import json
@@ -14,6 +15,10 @@ SEARCH_URL    = os.getenv("SEARCH_URL",     "https://www.stalker-co.ru/bitrix/to
 LLM_SERVER_URL = os.getenv("LLM_SERVER_URL", "http://31.76.227.1:8000/v1/chat/completions")
 LLM_MODEL     = os.getenv("LLM_MODEL",      "cotype-nano-Q4_K_M.gguf")
 BASE_WEB_URL  = os.getenv("BASE_WEB_URL",   "https://bot.stalker-co.ru")
+# Код для страницы общих акций сайта (режим ?all=1). Используется, когда у
+# пользователя нет персонального контрагента (аноним). Общие баннеры на сайте
+# отдаются под кодом "c1" (см. mlk_tgbotapi_banner.php).
+GENERAL_PROMO_CODE = os.getenv("GENERAL_PROMO_CODE", "c1")
 LLM_TIMEOUT   = 60
 
 # Категории каталога для финального fallback (Название|/url/), одна на строку
@@ -380,44 +385,93 @@ def _escape_html(s: str) -> str:
 
 # ── Прочие обработчики ────────────────────────────────────────────────────────
 
-async def handle_banners(user_id: int, partner_id: str = None, text: str = "") -> str:
-    if not partner_id:
-        return "Не указан партнёрский идентификатор. Проверьте настройки профиля."
-
-    brand_filter = None
+def _detect_brand(text: str) -> str | None:
+    """Извлекает бренд из запроса («акции по Matrix» → Matrix)."""
+    brand = None
     if text and _llm_instance:
         try:
-            brand_filter = extract_brand(text, _llm_instance)
+            brand = extract_brand(text, _llm_instance)
         except Exception:
             pass
-    if not brand_filter:
+    if not brand:
         match = re.search(r'по\s+(\w+)', text, re.IGNORECASE)
         if match:
-            brand_filter = match.group(1).capitalize()
+            brand = match.group(1).capitalize()
+    return brand
 
+
+def _promo_block(intro: str, button_text: str, url: str) -> str:
+    return (
+        f'<div class="mlk-chat-promo-message">'
+        f'<p>{_escape_html(intro)}</p>'
+        f'<div class="mlk-chat-promo-button" data-url="{url}">'
+        f'<span>{_escape_html(button_text)}</span>'
+        f'</div></div>'
+    )
+
+
+def _general_promo_block(intro: str, code: str = None, brand_filter: str = None) -> str:
+    """Кнопка на общие акции сайта (режим ?all=1) — баннеры общие для всех."""
+    url = f"{BASE_WEB_URL}/promo/{code or GENERAL_PROMO_CODE}?all=1"
+    if brand_filter:
+        url += f"&brand={brand_filter}"
+    return _promo_block(intro, "Смотреть общие акции", url)
+
+
+async def handle_banners(user_id: int, partner_id: str = None, text: str = "") -> str:
+    brand_filter = _detect_brand(text)
+    brand_text   = f' по бренду {brand_filter}' if brand_filter else ''
+
+    # Аноним или контрагент не выбран — персональных акций мы не знаем.
+    # Предлагаем общие акции сайта (как это делает Telegram-бот).
+    if not partner_id:
+        return _general_promo_block(
+            f"Чтобы показать персональные предложения, войдите в личный кабинет "
+            f"и выберите вашу компанию. А пока загляните в общие акции магазина{brand_text}:",
+            brand_filter=brand_filter,
+        )
+
+    # Проверяем, есть ли персональные акции для контрагента.
+    try:
+        promotions = await asyncio.to_thread(
+            promo_client.get_promotions_list_sync, partner_id
+        )
+    except Exception as e:
+        logger.warning(f"Не удалось получить персональные акции для {partner_id!r}: {e}")
+        promotions = None
+
+    # Персональных акций нет — предлагаем общие (по коду контрагента, как в TG-боте).
+    if not promotions:
+        return _general_promo_block(
+            f"Для вас сейчас нет персональных акций{brand_text}, "
+            f"но вы можете посмотреть общие акции магазина:",
+            code=partner_id,
+            brand_filter=brand_filter,
+        )
+
+    # Персональные акции есть — ведём на персональную страницу.
     web_app_url = f"{BASE_WEB_URL}/promo/{partner_id}"
     if brand_filter:
         web_app_url += f"?brand={brand_filter}"
-
-    brand_text = f' по бренду {brand_filter}' if brand_filter else ''
-    return (
-        f'<div class="mlk-chat-promo-message">'
-        f'<p>Вот акции специально для вас{brand_text}!</p>'
-        f'<div class="mlk-chat-promo-button" data-url="{web_app_url}">'
-        f'<span>Открыть акции</span>'
-        f'</div></div>'
+    return _promo_block(
+        f"Вот акции специально для вас{brand_text}!",
+        "Открыть акции",
+        web_app_url,
     )
 
 
 async def handle_balance(user_id: int) -> str:
     companies = db.get_user_companies(user_id)
     if not companies:
-        return "У вас нет привязанных компаний. Пожалуйста, обратитесь к менеджеру."
+        return (
+            "Бонусный баланс доступен после входа в личный кабинет — "
+            "войдите на сайте и выберите вашу компанию."
+        )
     code = companies[0]['code']
     data = await soap_client.get_bonus_balance(code)
     if data and "SumBonus" in data:
-        return f"Ваш бонусный баланс: {data['SumBonus']} баллов."
-    return "Не удалось получить баланс."
+        return f"Ваш бонусный баланс: <b>{_escape_html(str(data['SumBonus']))}</b> баллов."
+    return "Не удалось получить баланс, попробуйте позже."
 
 
 async def handle_history(user_id: int) -> str:
@@ -427,23 +481,29 @@ async def handle_history(user_id: int) -> str:
 async def handle_companies(user_id: int) -> str:
     companies = db.get_user_companies(user_id)
     if not companies:
-        return "У вас нет привязанных компаний. Пожалуйста, обратитесь к менеджеру."
-    lines = ["Ваши компании:"]
-    for comp in companies:
-        lines.append(f"• {comp['name']} (код {comp['code']})")
-    return "\n".join(lines)
+        return (
+            "Список компаний доступен после входа в личный кабинет — "
+            "войдите на сайте и выберите вашу компанию."
+        )
+    lines = "".join(
+        f"<li>{_escape_html(comp['name'])} (код {_escape_html(str(comp['code']))})</li>"
+        for comp in companies
+    )
+    return f"<p>Ваши компании:</p><ul>{lines}</ul>"
 
 
 def get_help_text() -> str:
     return (
-        "Я могу помочь вам со следующими запросами:\n"
-        "• Баланс баллов\n"
-        "• История операций\n"
-        "• Мои компании\n"
-        "• Акции и скидки\n"
-        "• Найди / подбери товар\n"
-        "• Реферальная программа\n"
-        "• Помощь"
+        "<p>Я могу помочь вам со следующими запросами:</p>"
+        "<ul>"
+        "<li>Баланс баллов</li>"
+        "<li>История операций</li>"
+        "<li>Мои компании</li>"
+        "<li>Акции и скидки</li>"
+        "<li>Найти / подобрать товар</li>"
+        "<li>Реферальная программа</li>"
+        "<li>Помощь</li>"
+        "</ul>"
     )
 
 
