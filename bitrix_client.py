@@ -18,6 +18,7 @@ def parse_banner(banner: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "id": banner.get("id"),
         "promo_code": banner.get("promo_code"),
+        "brand": banner.get("brand"),
         "segment_match": banner.get("segment_match", True),
         "banner_segments": banner.get("banner_segments", []),
         "name": banner.get("name"),

@@ -247,8 +247,17 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     <div class="container" id="content"></div>
     <div class="footer">Stalker-Co — всё для профессионалов</div>
     <script>
-        const tg = window.Telegram.WebApp;
-        tg.ready();
+        // Внутри Telegram используем настоящий WebApp, вне его (обычный браузер,
+        // напр. для debug-режима) — безопасную заглушку, чтобы скрипт не падал,
+        // если telegram-web-app.js недоступен или window.Telegram отсутствует.
+        const tg = (window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : {
+            ready: function() {},
+            onEvent: function() {},
+            openLink: function(url) { window.open(url, '_blank'); },
+            colorScheme: (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light',
+            initDataUnsafe: {}
+        };
+        try { tg.ready(); } catch (e) {}
 
         function setTheme() {
             if (tg.colorScheme === 'dark') {
@@ -260,7 +269,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             }
         }
         setTheme();
-        tg.onEvent('themeChanged', setTheme);
+        try { tg.onEvent('themeChanged', setTheme); } catch (e) {}
 
         function escapeHtml(str) {
             if (!str) return '';
@@ -604,7 +613,7 @@ def promo_data(partner_code):
                 'description': clean_text(banner.get('description', '')),
                 'image': clean_text(banner.get('image')),
                 'link': clean_text(banner.get('link')),
-                'mark': clean_text(matched_promo.get('mark', '')) if matched_promo else '',
+                'mark': clean_text(matched_promo.get('mark', '') if matched_promo else '') or clean_text(banner.get('brand', '') or ''),
                 'date_to': clean_text(matched_promo.get('date_to', '')) if matched_promo else '',
                 'details_missing': False,
                 'debug_status': status,
@@ -691,7 +700,7 @@ def promo_data(partner_code):
             'description': clean_text(banner.get('description', '')),
             'image': clean_text(banner.get('image')),
             'link': clean_text(banner.get('link')),
-            'mark': clean_text(matched_promo.get('mark', '')),
+            'mark': clean_text(matched_promo.get('mark', '')) or clean_text(banner.get('brand', '') or ''),
             'date_to': clean_text(matched_promo.get('date_to', '')),
             'details_missing': False
         })
