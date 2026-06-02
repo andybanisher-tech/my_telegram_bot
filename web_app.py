@@ -166,6 +166,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         .label-shown { background: #34c759; color: white; }
         .label-site-only { background: var(--site-only-text); color: white; }
         .label-segment-blocked { background: var(--segment-text); color: white; }
+        .label-no-site { background: #ff9500; color: white; }
         .label-hidden { background: var(--hidden-text); color: white; }
         .debug-meta { font-size: 12px; margin-top: 8px; opacity: 0.7; font-family: monospace; }
         .debug-section-header {
@@ -176,11 +177,73 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }
+        /* ── Debug filters ── */
+        .debug-filters {
+            position: sticky;
+            top: 0;
+            z-index: 20;
+            background: var(--bg-color);
+            padding: 10px 12px 12px;
+            margin: -20px -12px 16px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .filter-search {
+            width: 100%;
+            padding: 9px 13px;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            background: var(--card-bg);
+            color: var(--text-color);
+            font-size: 14px;
+            margin-bottom: 8px;
+            outline: none;
+        }
+        .filter-search:focus { border-color: var(--button-bg); }
+        .filter-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+        .filter-select {
+            padding: 6px 10px;
+            border-radius: 10px;
+            border: 1px solid var(--border-color);
+            background: var(--card-bg);
+            color: var(--text-color);
+            font-size: 13px;
+            flex: 1;
+            min-width: 110px;
+            outline: none;
+        }
+        .filter-count { font-size: 12px; color: var(--meta-color); white-space: nowrap; margin-left: auto; }
+        .status-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+        .status-chip {
+            display: inline-flex; align-items: center; gap: 4px;
+            padding: 4px 10px; border-radius: 20px;
+            font-size: 11px; font-weight: 600;
+            cursor: pointer; user-select: none; white-space: nowrap;
+            border: 2px solid transparent;
+            transition: opacity 0.15s, border-color 0.15s;
+        }
+        .status-chip.off { opacity: 0.3; }
+        .status-chip.on { border-color: rgba(255,255,255,0.5); }
+        .chip-count { font-size: 10px; opacity: 0.85; }
+        .filter-reset {
+            font-size: 12px; color: var(--button-bg); cursor: pointer;
+            padding: 4px 0; text-decoration: underline; white-space: nowrap;
+        }
         .footer { text-align: center; font-size: 12px; color: var(--meta-color); margin-top: 30px; }
         @media (max-width: 480px) { body { padding: 12px; } .promo-card { padding: 16px; } .promo-title { font-size: 18px; } }
     </style>
 </head>
 <body>
+    <div id="debug-filters" class="debug-filters" style="display:none">
+        <div style="max-width:550px;margin:0 auto">
+            <input type="text" id="filter-search" class="filter-search" placeholder="ID акции, название, ID сегмента…">
+            <div class="filter-row">
+                <select id="filter-brand" class="filter-select"><option value="">Все марки</option></select>
+                <span id="filter-count" class="filter-count"></span>
+                <span class="filter-reset" id="filter-reset">Сбросить</span>
+            </div>
+            <div class="status-chips" id="status-chips"></div>
+        </div>
+    </div>
     <div class="container" id="content"></div>
     <div class="footer">Stalker-Co — всё для профессионалов</div>
     <script>
@@ -246,35 +309,38 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         if (debugMode) dataUrl += (brandFilter ? '&' : '?') + 'debug=1';
         else if (allMode) dataUrl += (brandFilter ? '&' : '?') + 'all=1';
 
-        const STATUS_LABELS = {
-            'shown':            ['label-shown',            '✅ Показывается'],
-            'site_only':        ['label-site-only',        '🌐 Есть на сайте, нет в личном списке'],
-            'segment_blocked':  ['label-segment-blocked',  '🔒 Заблокирована сегментом'],
-            'hidden':           ['label-hidden',            '👻 Скрыта (нет в списке и не в сегменте)'],
+        const STATUS_META = {
+            'shown':           { label: 'label-shown',           text: '✅ Показывается',                      card: 'promo-card' },
+            'site_only':       { label: 'label-site-only',       text: '🌐 Есть на сайте, нет в личном списке', card: 'promo-card site-only' },
+            'segment_blocked': { label: 'label-segment-blocked', text: '🔒 Заблокирована сегментом',            card: 'promo-card segment-blocked' },
+            'no_site':         { label: 'label-no-site',         text: '⚠️ Есть в личном списке, нет на сайте', card: 'promo-card warning' },
+            'hidden':          { label: 'label-hidden',          text: '👻 Вне сегмента и вне личного списка',  card: 'promo-card hidden-card' },
         };
-        const STATUS_CARD = {
-            'shown':           'promo-card',
-            'site_only':       'promo-card site-only',
-            'segment_blocked': 'promo-card segment-blocked',
-            'hidden':          'promo-card hidden-card',
+        const STATUS_ORDER = ['shown', 'site_only', 'segment_blocked', 'no_site', 'hidden'];
+        const STATUS_COLORS = {
+            'shown': '#34c759', 'site_only': '#007aff',
+            'segment_blocked': '#ff9500', 'no_site': '#ff3b30', 'hidden': '#8e8e93'
         };
+
+        let allPromotions = [];
+        let activeStatuses = new Set(STATUS_ORDER);
 
         function renderPromo(promo) {
             const status = promo.debug_status || 'shown';
-            const cardClass = debugMode ? (STATUS_CARD[status] || 'promo-card') : (promo.details_missing ? 'promo-card warning' : 'promo-card');
+            const meta = STATUS_META[status] || STATUS_META['shown'];
+            const cardClass = debugMode ? meta.card : (promo.details_missing ? 'promo-card warning' : 'promo-card');
             const promoLink = promo.link && !promo.details_missing ? promo.link : null;
 
             let debugTop = '';
             if (debugMode) {
-                const [labelClass, labelText] = STATUS_LABELS[status] || STATUS_LABELS['shown'];
-                debugTop = `<div class="debug-label ${labelClass}">${labelText}</div>`;
                 const segInfo = promo.banner_segments && promo.banner_segments.length
-                    ? `сегменты баннера: [${promo.banner_segments.join(', ')}]`
+                    ? `сегменты: [${promo.banner_segments.join(', ')}]`
                     : 'сегмент не ограничен';
                 const pcInfo = promo.promo_code ? `promo_code: ${escapeHtml(promo.promo_code)}` : 'promo_code не задан';
-                debugTop += `<div class="debug-meta">${pcInfo} · ${segInfo}`;
-                if (promo.id) debugTop += ` · id: ${escapeHtml(String(promo.id))}`;
-                debugTop += `</div>`;
+                const idInfo = promo.id ? `id: ${escapeHtml(String(promo.id))}` : '';
+                debugTop = `
+                    <div class="debug-label ${meta.label}">${meta.text}</div>
+                    <div class="debug-meta">${[pcInfo, segInfo, idInfo].filter(Boolean).join(' · ')}</div>`;
             }
 
             return `
@@ -292,34 +358,124 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             </div>`;
         }
 
+        function applyFilters() {
+            const search = document.getElementById('filter-search').value.trim().toLowerCase();
+            const brand  = document.getElementById('filter-brand').value;
+
+            const filtered = allPromotions.filter(p => {
+                if (debugMode && !activeStatuses.has(p.debug_status || 'shown')) return false;
+                if (brand && p.mark !== brand) return false;
+                if (search) {
+                    const segs = (p.banner_segments || []).join(' ');
+                    const hay = [p.name, p.id, p.promo_code, segs].join(' ').toLowerCase();
+                    if (!hay.includes(search)) return false;
+                }
+                return true;
+            });
+
+            const container = document.getElementById('content');
+            if (!filtered.length) {
+                container.innerHTML = `<div style="background:var(--card-bg);border-radius:20px;padding:40px 20px;text-align:center;">Ничего не найдено</div>`;
+                document.getElementById('filter-count').textContent = '0 из ' + allPromotions.length;
+                return;
+            }
+
+            if (debugMode) {
+                const groups = {};
+                STATUS_ORDER.forEach(s => { groups[s] = []; });
+                filtered.forEach(p => { (groups[p.debug_status || 'shown'] || groups['shown']).push(p); });
+                // Count by status across ALL data (not just filtered) for chip labels
+                const totalByStatus = {};
+                STATUS_ORDER.forEach(s => { totalByStatus[s] = 0; });
+                allPromotions.forEach(p => { totalByStatus[p.debug_status || 'shown']++; });
+                // Update chip counts
+                STATUS_ORDER.forEach(s => {
+                    const chip = document.getElementById('chip-' + s);
+                    if (chip) {
+                        const cnt = groups[s].length;
+                        chip.querySelector('.chip-count').textContent = cnt;
+                    }
+                });
+
+                const sectionTitles = {
+                    'shown':           '✅ Показываются',
+                    'site_only':       '🌐 Есть на сайте, нет в личном списке',
+                    'segment_blocked': '🔒 Заблокированы сегментом',
+                    'no_site':         '⚠️ Есть в личном списке, нет на сайте',
+                    'hidden':          '👻 Вне сегмента и вне личного списка',
+                };
+                let html = '';
+                STATUS_ORDER.forEach(s => {
+                    if (groups[s].length) {
+                        html += `<div class="debug-section-header">${sectionTitles[s]} (${groups[s].length})</div>`;
+                        groups[s].forEach(p => { html += renderPromo(p); });
+                    }
+                });
+                container.innerHTML = html;
+            } else {
+                container.innerHTML = filtered.map(renderPromo).join('');
+            }
+
+            document.getElementById('filter-count').textContent = filtered.length + ' из ' + allPromotions.length;
+        }
+
+        function initDebugFilters() {
+            document.getElementById('debug-filters').style.display = '';
+
+            // Brand dropdown
+            const marks = [...new Set(allPromotions.map(p => p.mark).filter(Boolean))].sort();
+            const sel = document.getElementById('filter-brand');
+            marks.forEach(m => {
+                const opt = document.createElement('option');
+                opt.value = m; opt.textContent = m;
+                sel.appendChild(opt);
+            });
+
+            // Status chips
+            const chipsEl = document.getElementById('status-chips');
+            STATUS_ORDER.forEach(s => {
+                const count = allPromotions.filter(p => (p.debug_status || 'shown') === s).length;
+                if (!count) return;
+                const chip = document.createElement('span');
+                chip.className = 'status-chip on';
+                chip.id = 'chip-' + s;
+                chip.style.background = STATUS_COLORS[s];
+                chip.style.color = 'white';
+                chip.innerHTML = `${STATUS_META[s].text.split(' ')[0]} <span class="chip-count">${count}</span>`;
+                chip.addEventListener('click', () => {
+                    if (activeStatuses.has(s)) {
+                        activeStatuses.delete(s);
+                        chip.classList.replace('on', 'off');
+                    } else {
+                        activeStatuses.add(s);
+                        chip.classList.replace('off', 'on');
+                    }
+                    applyFilters();
+                });
+                chipsEl.appendChild(chip);
+            });
+
+            document.getElementById('filter-search').addEventListener('input', applyFilters);
+            document.getElementById('filter-brand').addEventListener('change', applyFilters);
+            document.getElementById('filter-reset').addEventListener('click', () => {
+                document.getElementById('filter-search').value = '';
+                document.getElementById('filter-brand').value = '';
+                activeStatuses = new Set(STATUS_ORDER);
+                document.querySelectorAll('.status-chip').forEach(c => c.classList.replace('off', 'on'));
+                applyFilters();
+            });
+        }
+
         fetch(dataUrl)
             .then(response => response.json())
             .then(data => {
                 const container = document.getElementById('content');
                 if (data.promotions && data.promotions.length) {
+                    allPromotions = data.promotions;
                     if (debugMode) {
-                        const groups = { shown: [], site_only: [], segment_blocked: [], hidden: [] };
-                        data.promotions.forEach(p => {
-                            const s = p.debug_status || 'shown';
-                            (groups[s] || groups.shown).push(p);
-                        });
-                        let html = '';
-                        const sections = [
-                            ['shown',           `✅ Показываются (${groups.shown.length})`],
-                            ['site_only',       `🌐 Есть на сайте, нет в личном списке (${groups.site_only.length})`],
-                            ['segment_blocked', `🔒 Заблокированы сегментом (${groups.segment_blocked.length})`],
-                            ['hidden',          `👻 Вне сегмента и вне личного списка (${groups.hidden.length})`],
-                        ];
-                        sections.forEach(([key, title]) => {
-                            if (groups[key].length) {
-                                html += `<div class="debug-section-header">${title}</div>`;
-                                groups[key].forEach(p => { html += renderPromo(p); });
-                            }
-                        });
-                        container.innerHTML = html;
-                    } else {
-                        container.innerHTML = data.promotions.map(renderPromo).join('');
+                        initDebugFilters();
                     }
+                    applyFilters();
                 } else {
                     container.innerHTML = `<div style="background: var(--card-bg); border-radius: 20px; padding: 40px 20px; text-align: center;">На данный момент нет активных акций</div>`;
                 }
@@ -408,6 +564,8 @@ def promo_data(partner_code):
         all_banners = bitrix_client.get_banners_all_sync(partner_code) or []
 
         enriched = []
+        matched_exchange_ids = set()
+
         for banner in all_banners:
             promo_code_raw = banner.get('promo_code') or ''
             promo_codes = [p.strip() for p in str(promo_code_raw).split(',') if p.strip()]
@@ -422,6 +580,8 @@ def promo_data(partner_code):
                     break
 
             in_exchange = matched_promo is not None
+            if in_exchange:
+                matched_exchange_ids.add(matched_id)
 
             if in_exchange and segment_match:
                 status = 'shown'
@@ -450,7 +610,28 @@ def promo_data(partner_code):
                 'debug_status': status,
             })
 
-        enriched.sort(key=lambda x: ['shown', 'site_only', 'segment_blocked', 'hidden'].index(x['debug_status']))
+        # Акции из exchange, которые не нашлись ни в одном баннере
+        for pid, promo in promo_map.items():
+            if pid in matched_exchange_ids:
+                continue
+            if brand_filter and promo.get('mark', '').lower() != brand_filter.lower():
+                continue
+            enriched.append({
+                'id': pid,
+                'promo_code': pid,
+                'banner_segments': [],
+                'name': clean_text(promo.get('name', 'Акция')),
+                'description': '',
+                'image': None,
+                'link': None,
+                'mark': clean_text(promo.get('mark', '')),
+                'date_to': clean_text(promo.get('date_to', '')),
+                'details_missing': False,
+                'debug_status': 'no_site',
+            })
+
+        status_order = ['shown', 'site_only', 'segment_blocked', 'no_site', 'hidden']
+        enriched.sort(key=lambda x: status_order.index(x.get('debug_status', 'shown')))
         return jsonify({"promotions": enriched})
 
     if all_mode:
