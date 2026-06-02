@@ -310,11 +310,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         else if (allMode) dataUrl += (brandFilter ? '&' : '?') + 'all=1';
 
         const STATUS_META = {
-            'shown':           { label: 'label-shown',           text: '✅ Показывается',                      card: 'promo-card' },
-            'site_only':       { label: 'label-site-only',       text: '🌐 Есть на сайте, нет в личном списке', card: 'promo-card site-only' },
-            'segment_blocked': { label: 'label-segment-blocked', text: '🔒 Заблокирована сегментом',            card: 'promo-card segment-blocked' },
-            'no_site':         { label: 'label-no-site',         text: '⚠️ Есть в личном списке, нет на сайте', card: 'promo-card warning' },
-            'hidden':          { label: 'label-hidden',          text: '👻 Вне сегмента и вне личного списка',  card: 'promo-card hidden-card' },
+            'shown':           { label: 'label-shown',           text: '✅ Показывается',                      chip: 'Показывается',          card: 'promo-card' },
+            'site_only':       { label: 'label-site-only',       text: '🌐 Есть на сайте, нет в личном списке', chip: 'Только на сайте',       card: 'promo-card site-only' },
+            'segment_blocked': { label: 'label-segment-blocked', text: '🔒 Заблокирована сегментом',            chip: 'Блок по сегменту',      card: 'promo-card segment-blocked' },
+            'no_site':         { label: 'label-no-site',         text: '⚠️ Есть в личном списке, нет на сайте', chip: 'Только в личном списке', card: 'promo-card warning' },
+            'hidden':          { label: 'label-hidden',          text: '👻 Вне сегмента и вне личного списка',  chip: 'Скрыта полностью',      card: 'promo-card hidden-card' },
         };
         const STATUS_ORDER = ['shown', 'site_only', 'segment_blocked', 'no_site', 'hidden'];
         const STATUS_COLORS = {
@@ -441,7 +441,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 chip.id = 'chip-' + s;
                 chip.style.background = STATUS_COLORS[s];
                 chip.style.color = 'white';
-                chip.innerHTML = `${STATUS_META[s].text.split(' ')[0]} <span class="chip-count">${count}</span>`;
+                chip.innerHTML = `${STATUS_META[s].chip} <span class="chip-count">${count}</span>`;
                 chip.addEventListener('click', () => {
                     if (activeStatuses.has(s)) {
                         activeStatuses.delete(s);
