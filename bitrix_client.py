@@ -18,6 +18,8 @@ def parse_banner(banner: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "id": banner.get("id"),
         "promo_code": banner.get("promo_code"),
+        "segment_match": banner.get("segment_match", True),
+        "banner_segments": banner.get("banner_segments", []),
         "name": banner.get("name"),
         "description": banner.get("description"),
         "image": banner.get("image"),
@@ -52,10 +54,7 @@ def get_banners_sync(company_code: str) -> Optional[List[Dict[str, Any]]]:
     if not config["api_key"]:
         logger.error("BITRIX_API_KEY не задан в .env")
         return None
-    params = {
-        "key": config["api_key"],
-        "code": company_code
-    }
+    params = {"key": config["api_key"], "code": company_code}
     try:
         response = requests.get(BITRIX_API_URL, params=params, timeout=30)
         logger.info(f"Bitrix API (sync) ответ: статус {response.status_code}")
@@ -68,4 +67,24 @@ def get_banners_sync(company_code: str) -> Optional[List[Dict[str, Any]]]:
         return parsed
     except Exception as e:
         logger.error(f"Исключение при запросе к Bitrix API (sync): {e}")
+        return None
+
+def get_banners_all_sync(company_code: str) -> Optional[List[Dict[str, Any]]]:
+    """Все баннеры без фильтрации по сегменту (для debug-режима)."""
+    config = get_config()
+    if not config["api_key"]:
+        logger.error("BITRIX_API_KEY не задан в .env")
+        return None
+    params = {"key": config["api_key"], "code": company_code, "no_segment": "1"}
+    try:
+        response = requests.get(BITRIX_API_URL, params=params, timeout=30)
+        logger.info(f"Bitrix API all (sync) ответ: статус {response.status_code}")
+        if response.status_code != 200:
+            logger.error(f"Ошибка Bitrix API: статус {response.status_code}")
+            return None
+        data = response.json()
+        banners = data.get("banners", [])
+        return [parse_banner(b) for b in banners]
+    except Exception as e:
+        logger.error(f"Исключение при запросе к Bitrix API all (sync): {e}")
         return None

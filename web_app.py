@@ -119,6 +119,63 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             margin-top: 10px;
             text-align: center;
         }
+        body.light {
+            --site-only-bg: #e8f4fd;
+            --site-only-border: #b3d9f5;
+            --site-only-text: #0a5c8a;
+            --segment-bg: #fff0e0;
+            --segment-border: #ffd5a0;
+            --segment-text: #7a4000;
+            --hidden-bg: #f0f0f0;
+            --hidden-border: #d0d0d0;
+            --hidden-text: #666666;
+        }
+        body.dark {
+            --site-only-bg: #0a2a3d;
+            --site-only-border: #0f4a6e;
+            --site-only-text: #7dc8f5;
+            --segment-bg: #2d1a00;
+            --segment-border: #5a3500;
+            --segment-text: #ffb060;
+            --hidden-bg: #1a1a1a;
+            --hidden-border: #333333;
+            --hidden-text: #888888;
+        }
+        .promo-card.site-only {
+            background: var(--site-only-bg);
+            border-color: var(--site-only-border);
+        }
+        .promo-card.segment-blocked {
+            background: var(--segment-bg);
+            border-color: var(--segment-border);
+        }
+        .promo-card.hidden-card {
+            background: var(--hidden-bg);
+            border-color: var(--hidden-border);
+            opacity: 0.7;
+        }
+        .debug-label {
+            display: inline-block;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 3px 8px;
+            border-radius: 10px;
+            margin-bottom: 8px;
+            letter-spacing: 0.3px;
+        }
+        .label-shown { background: #34c759; color: white; }
+        .label-site-only { background: var(--site-only-text); color: white; }
+        .label-segment-blocked { background: var(--segment-text); color: white; }
+        .label-hidden { background: var(--hidden-text); color: white; }
+        .debug-meta { font-size: 12px; margin-top: 8px; opacity: 0.7; font-family: monospace; }
+        .debug-section-header {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--meta-color);
+            margin: 20px 0 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
         .footer { text-align: center; font-size: 12px; color: var(--meta-color); margin-top: 30px; }
         @media (max-width: 480px) { body { padding: 12px; } .promo-card { padding: 16px; } .promo-title { font-size: 18px; } }
     </style>
@@ -189,32 +246,80 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         if (debugMode) dataUrl += (brandFilter ? '&' : '?') + 'debug=1';
         else if (allMode) dataUrl += (brandFilter ? '&' : '?') + 'all=1';
 
+        const STATUS_LABELS = {
+            'shown':            ['label-shown',            '✅ Показывается'],
+            'site_only':        ['label-site-only',        '🌐 Есть на сайте, нет в личном списке'],
+            'segment_blocked':  ['label-segment-blocked',  '🔒 Заблокирована сегментом'],
+            'hidden':           ['label-hidden',            '👻 Скрыта (нет в списке и не в сегменте)'],
+        };
+        const STATUS_CARD = {
+            'shown':           'promo-card',
+            'site_only':       'promo-card site-only',
+            'segment_blocked': 'promo-card segment-blocked',
+            'hidden':          'promo-card hidden-card',
+        };
+
+        function renderPromo(promo) {
+            const status = promo.debug_status || 'shown';
+            const cardClass = debugMode ? (STATUS_CARD[status] || 'promo-card') : (promo.details_missing ? 'promo-card warning' : 'promo-card');
+            const promoLink = promo.link && !promo.details_missing ? promo.link : null;
+
+            let debugTop = '';
+            if (debugMode) {
+                const [labelClass, labelText] = STATUS_LABELS[status] || STATUS_LABELS['shown'];
+                debugTop = `<div class="debug-label ${labelClass}">${labelText}</div>`;
+                const segInfo = promo.banner_segments && promo.banner_segments.length
+                    ? `сегменты баннера: [${promo.banner_segments.join(', ')}]`
+                    : 'сегмент не ограничен';
+                const pcInfo = promo.promo_code ? `promo_code: ${escapeHtml(promo.promo_code)}` : 'promo_code не задан';
+                debugTop += `<div class="debug-meta">${pcInfo} · ${segInfo}`;
+                if (promo.id) debugTop += ` · id: ${escapeHtml(String(promo.id))}`;
+                debugTop += `</div>`;
+            }
+
+            return `
+            <div class="${cardClass}">
+                ${debugTop}
+                <div class="promo-title">${escapeHtml(promo.name)}</div>
+                <div class="promo-meta">
+                    ${promo.mark ? `<span class="brand-badge">${escapeHtml(promo.mark)}</span>` : ''}
+                    ${promo.date_to ? `<span>до ${formatDate(promo.date_to)}</span>` : ''}
+                </div>
+                ${promo.image ? `<div class="promo-image"><img src="${escapeHtml(promo.image)}" alt="Превью акции"></div>` : ''}
+                ${promo.description ? `<div class="promo-description">${escapeHtml(promo.description)}</div>` : ''}
+                ${promo.details_missing ? `<div class="warning-text">ВНИМАНИЕ: Для этой акции нет описания на сайте!</div>` : ''}
+                ${promoLink ? `<a href="#" onclick="trackClick('${escapeHtml(String(promo.id))}', '${escapeHtml(promo.name)}', '${escapeHtml(promoLink)}'); return false;" class="promo-button">Подробнее на сайте</a>` : ''}
+            </div>`;
+        }
+
         fetch(dataUrl)
             .then(response => response.json())
             .then(data => {
                 const container = document.getElementById('content');
                 if (data.promotions && data.promotions.length) {
-                    let html = '';
-                    data.promotions.forEach(promo => {
-                        const cardClass = promo.details_missing ? 'promo-card warning' : 'promo-card';
-                        const promoLink = promo.link && !promo.details_missing ? promo.link : null;
-                        const promoIdHtml = debugMode ? `<span class="promo-id">ID: ${escapeHtml(promo.id)}</span>` : '';
-                        html += `
-                        <div class="${cardClass}">
-                            <div class="promo-title">${escapeHtml(promo.name)}</div>
-                            <div class="promo-meta">
-                                ${promo.mark ? `<span class="brand-badge">${escapeHtml(promo.mark)}</span>` : ''}
-                                ${promoIdHtml}
-                                ${promo.date_to ? `<span>до ${formatDate(promo.date_to)}</span>` : ''}
-                            </div>
-                            ${promo.image ? `<div class="promo-image"><img src="${escapeHtml(promo.image)}" alt="Превью акции"></div>` : ''}
-                            ${promo.description ? `<div class="promo-description">${escapeHtml(promo.description)}</div>` : ''}
-                            ${promo.details_missing ? `<div class="warning-text">ВНИМАНИЕ: Для этой акции нет описания на сайте! Требуется настройка.</div>` : ''}
-                            ${promoLink ? `<a href="#" onclick="trackClick('${escapeHtml(promo.id)}', '${escapeHtml(promo.name)}', '${escapeHtml(promoLink)}'); return false;" class="promo-button">Подробнее на сайте</a>` : ''}
-                        </div>
-                        `;
-                    });
-                    container.innerHTML = html;
+                    if (debugMode) {
+                        const groups = { shown: [], site_only: [], segment_blocked: [], hidden: [] };
+                        data.promotions.forEach(p => {
+                            const s = p.debug_status || 'shown';
+                            (groups[s] || groups.shown).push(p);
+                        });
+                        let html = '';
+                        const sections = [
+                            ['shown',           `✅ Показываются (${groups.shown.length})`],
+                            ['site_only',       `🌐 Есть на сайте, нет в личном списке (${groups.site_only.length})`],
+                            ['segment_blocked', `🔒 Заблокированы сегментом (${groups.segment_blocked.length})`],
+                            ['hidden',          `👻 Вне сегмента и вне личного списка (${groups.hidden.length})`],
+                        ];
+                        sections.forEach(([key, title]) => {
+                            if (groups[key].length) {
+                                html += `<div class="debug-section-header">${title}</div>`;
+                                groups[key].forEach(p => { html += renderPromo(p); });
+                            }
+                        });
+                        container.innerHTML = html;
+                    } else {
+                        container.innerHTML = data.promotions.map(renderPromo).join('');
+                    }
                 } else {
                     container.innerHTML = `<div style="background: var(--card-bg); border-radius: 20px; padding: 40px 20px; text-align: center;">На данный момент нет активных акций</div>`;
                 }
@@ -293,31 +398,59 @@ def promo_data(partner_code):
 
     if debug_mode:
         promotions_list = promo_client.get_promotions_list_sync(partner_code)
-        if not promotions_list:
-            return jsonify({"promotions": []}), 404
-        promo_ids = []
         promo_map = {}
-        for promo in promotions_list:
-            promo_id = promo.get('id')
-            if promo_id:
-                promo_ids.append(promo_id)
-                promo_map[promo_id] = promo
-        details_map = promo_client.get_promotion_details_batch_sync(promo_ids) if promo_ids else {}
+        if promotions_list:
+            for promo in promotions_list:
+                pid = str(promo.get('id', '')).strip()
+                if pid:
+                    promo_map[pid] = promo
+
+        all_banners = bitrix_client.get_banners_all_sync(partner_code) or []
+
         enriched = []
-        for promo_id, promo in promo_map.items():
-            details = details_map.get(promo_id)
+        for banner in all_banners:
+            promo_code_raw = banner.get('promo_code') or ''
+            promo_codes = [p.strip() for p in str(promo_code_raw).split(',') if p.strip()]
+            segment_match = banner.get('segment_match', True)
+
+            matched_promo = None
+            matched_id = None
+            for pc in promo_codes:
+                if pc in promo_map:
+                    matched_promo = promo_map[pc]
+                    matched_id = pc
+                    break
+
+            in_exchange = matched_promo is not None
+
+            if in_exchange and segment_match:
+                status = 'shown'
+            elif in_exchange and not segment_match:
+                status = 'segment_blocked'
+            elif not in_exchange and segment_match:
+                status = 'site_only'
+            else:
+                status = 'hidden'
+
+            if brand_filter and matched_promo:
+                if matched_promo.get('mark', '').lower() != brand_filter.lower():
+                    continue
+
             enriched.append({
-                'id': promo_id,
-                'name': clean_text(promo.get('name', 'Акция')),
-                'description': clean_text(details.get('description')) if details else '',
-                'image': clean_text(details.get('image')) if details else None,
-                'link': clean_text(details.get('link')) if details else None,
-                'mark': clean_text(promo.get('mark', '')),
-                'date_to': clean_text(promo.get('date_to', '')),
-                'details_missing': details is None
+                'id': matched_id or promo_code_raw or str(banner.get('id', '')),
+                'promo_code': promo_code_raw,
+                'banner_segments': banner.get('banner_segments', []),
+                'name': clean_text(banner.get('name') or (matched_promo.get('name') if matched_promo else None) or 'Акция'),
+                'description': clean_text(banner.get('description', '')),
+                'image': clean_text(banner.get('image')),
+                'link': clean_text(banner.get('link')),
+                'mark': clean_text(matched_promo.get('mark', '')) if matched_promo else '',
+                'date_to': clean_text(matched_promo.get('date_to', '')) if matched_promo else '',
+                'details_missing': False,
+                'debug_status': status,
             })
-        if brand_filter:
-            enriched = [p for p in enriched if brand_filter.lower() in p['name'].lower()]
+
+        enriched.sort(key=lambda x: ['shown', 'site_only', 'segment_blocked', 'hidden'].index(x['debug_status']))
         return jsonify({"promotions": enriched})
 
     if all_mode:
