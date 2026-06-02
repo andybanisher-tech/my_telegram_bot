@@ -16,6 +16,8 @@ def get_config():
 
 def parse_banner(banner: Dict[str, Any]) -> Dict[str, Any]:
     return {
+        "id": banner.get("id"),
+        "promo_code": banner.get("promo_code"),
         "name": banner.get("name"),
         "description": banner.get("description"),
         "image": banner.get("image"),

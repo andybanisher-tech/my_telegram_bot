@@ -343,33 +343,42 @@ def promo_data(partner_code):
     promotions_list = promo_client.get_promotions_list_sync(partner_code)
     if not promotions_list:
         return jsonify({"promotions": []}), 404
-    promo_ids = []
     promo_map = {}
     for promo in promotions_list:
-        promo_id = promo.get('id')
+        promo_id = str(promo.get('id', '')).strip()
         if promo_id:
-            promo_ids.append(promo_id)
             promo_map[promo_id] = promo
-    if not promo_ids:
+    if not promo_map:
         return jsonify({"promotions": []}), 404
-    details_map = promo_client.get_promotion_details_batch_sync(promo_ids)
+
+    banners = bitrix_client.get_banners_sync(partner_code)
+    if not banners:
+        return jsonify({"promotions": []}), 404
+
     enriched = []
-    for promo_id, promo in promo_map.items():
-        details = details_map.get(promo_id)
-        if not details:
+    for banner in banners:
+        promo_code_raw = banner.get('promo_code') or ''
+        promo_codes = [p.strip() for p in str(promo_code_raw).split(',') if p.strip()]
+        matched_promo = None
+        matched_id = None
+        for pc in promo_codes:
+            if pc in promo_map:
+                matched_promo = promo_map[pc]
+                matched_id = pc
+                break
+        if not matched_promo:
             continue
         if brand_filter:
-            promo_mark = promo.get('mark', '')
-            if promo_mark.lower() != brand_filter.lower():
+            if matched_promo.get('mark', '').lower() != brand_filter.lower():
                 continue
         enriched.append({
-            'id': promo_id,
-            'name': clean_text(details.get('name')) if details else clean_text(promo.get('name', 'Акция')),
-            'description': clean_text(details.get('description')) if details else '',
-            'image': clean_text(details.get('image')) if details else None,
-            'link': clean_text(details.get('link')) if details else None,
-            'mark': clean_text(promo.get('mark', '')),
-            'date_to': clean_text(promo.get('date_to', '')),
+            'id': matched_id,
+            'name': clean_text(banner.get('name')) or clean_text(matched_promo.get('name', 'Акция')),
+            'description': clean_text(banner.get('description', '')),
+            'image': clean_text(banner.get('image')),
+            'link': clean_text(banner.get('link')),
+            'mark': clean_text(matched_promo.get('mark', '')),
+            'date_to': clean_text(matched_promo.get('date_to', '')),
             'details_missing': False
         })
     return jsonify({"promotions": enriched})
