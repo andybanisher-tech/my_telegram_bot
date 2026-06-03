@@ -322,7 +322,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             'shown':           { label: 'label-shown',           text: '✅ Показывается',                      chip: 'Показывается',          card: 'promo-card' },
             'site_only':       { label: 'label-site-only',       text: '🌐 Есть на сайте, нет в 1С', chip: 'Только на сайте',       card: 'promo-card site-only' },
             'segment_blocked': { label: 'label-segment-blocked', text: '🔒 Заблокирована сегментом',            chip: 'Блок по сегменту',      card: 'promo-card segment-blocked' },
-            'no_site':         { label: 'label-no-site',         text: '⚠️ Есть в 1С, нет на сайте', chip: 'Только в личном списке', card: 'promo-card warning' },
+            'no_site':         { label: 'label-no-site',         text: '⚠️ Есть в 1С, нет на сайте', chip: 'Только в 1С', card: 'promo-card warning' },
             'hidden':          { label: 'label-hidden',          text: '👻 Вне сегмента и нет в 1С',  chip: 'Скрыта полностью',      card: 'promo-card hidden-card' },
         };
         const STATUS_ORDER = ['shown', 'site_only', 'segment_blocked', 'no_site', 'hidden'];
@@ -408,10 +408,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
                 const sectionTitles = {
                     'shown':           '✅ Показываются',
-                    'site_only':       '🌐 Есть на сайте, нет в личном списке',
+                    'site_only':       '🌐 Есть на сайте, нет в 1С',
                     'segment_blocked': '🔒 Заблокированы сегментом',
-                    'no_site':         '⚠️ Есть в личном списке, нет на сайте',
-                    'hidden':          '👻 Вне сегмента и вне личного списка',
+                    'no_site':         '⚠️ Есть в 1С, нет на сайте',
+                    'hidden':          '👻 Вне сегмента и нет в 1С',
                 };
                 let html = '';
                 STATUS_ORDER.forEach(s => {
