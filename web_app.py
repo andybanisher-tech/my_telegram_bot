@@ -250,33 +250,32 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         }
         .funnel-h {
             font-size: 12px; font-weight: 700; text-transform: uppercase;
-            letter-spacing: 0.5px; color: var(--meta-color); margin-bottom: 10px;
+            letter-spacing: 0.5px; color: var(--meta-color); margin-bottom: 12px;
         }
-        .funnel-sources { display: flex; gap: 10px; }
-        .funnel-src {
-            flex: 1; border: 1px solid var(--border-color); border-radius: 12px;
-            padding: 10px; text-align: center; background: var(--brand-bg);
+        .funnel-stage, .funnel-final {
+            margin: 0 auto; border-radius: 12px; padding: 10px 12px; text-align: center;
+            border: 1px solid var(--border-color); background: var(--brand-bg);
+            cursor: pointer; transition: transform .1s;
         }
-        .funnel-src .src-ico { font-size: 20px; }
-        .funnel-src .src-name { font-size: 12px; font-weight: 600; margin: 4px 0 2px; color: var(--text-color); }
-        .funnel-src .src-sub { font-size: 11px; color: var(--meta-color); }
-        .funnel-src .src-num { font-size: 18px; font-weight: 700; margin-top: 4px; color: var(--text-color); }
-        .funnel-merge { text-align: center; font-size: 11px; color: var(--meta-color); margin: 8px 0; }
-        .funnel-out { display: flex; flex-direction: column; gap: 6px; }
-        .funnel-row {
-            display: flex; align-items: center; gap: 10px; padding: 8px 10px;
-            border-radius: 10px; cursor: pointer; border: 1px solid var(--border-color);
-            background: var(--bg-color);
+        .funnel-final { background: rgba(52,199,89,0.12); border: 2px solid #34c759; }
+        .funnel-stage:active, .funnel-final:active { transform: scale(0.99); }
+        .funnel-stage .fs-num, .funnel-final .fs-num { font-size: 20px; font-weight: 700; color: var(--text-color); }
+        .funnel-stage .fs-name, .funnel-final .fs-name { font-size: 12px; color: var(--meta-color); margin-top: 2px; }
+        .funnel-conn { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 6px 0; }
+        .funnel-arrow { color: var(--meta-color); font-size: 14px; }
+        .funnel-drop {
+            display: inline-flex; align-items: center; gap: 6px; font-size: 12px;
+            padding: 4px 10px; border-radius: 16px; cursor: pointer;
+            background: var(--bg-color); border: 1px dashed;
         }
-        .funnel-row:active { transform: scale(0.99); }
+        .funnel-drop .fd-num { font-weight: 700; }
         .funnel-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-        .funnel-text { display: flex; flex-direction: column; }
-        .funnel-text .fr-label { font-size: 13px; font-weight: 600; color: var(--text-color); }
-        .funnel-text .fr-why { font-size: 11px; color: var(--meta-color); }
-        .funnel-row .fr-count { margin-left: auto; font-size: 16px; font-weight: 700; }
-        .funnel-result {
-            text-align: center; font-size: 13px; color: var(--text-color);
-            margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border-color);
+        .funnel-aside { margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--border-color); }
+        .funnel-aside-h { font-size: 11px; color: var(--meta-color); margin-bottom: 8px; text-transform: uppercase; letter-spacing: .5px; }
+        .funnel-aside-row {
+            display: flex; align-items: center; gap: 8px; padding: 7px 10px;
+            border-radius: 8px; cursor: pointer; font-size: 12px; color: var(--text-color);
+            border: 1px solid var(--border-color); margin-bottom: 6px; background: var(--bg-color);
         }
         .footer { text-align: center; font-size: 12px; color: var(--meta-color); margin-top: 30px; }
         @media (max-width: 480px) { body { padding: 12px; } .promo-card { padding: 16px; } .promo-title { font-size: 18px; } }
@@ -509,42 +508,53 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             STATUS_ORDER.forEach(s => { c[s] = 0; });
             allPromotions.forEach(p => { c[p.debug_status || 'shown'] = (c[p.debug_status || 'shown'] || 0) + 1; });
 
-            const exchTotal = c.shown + c.segment_blocked + c.no_site;   // пришли из листа обзвона 1С
-            const siteTotal = c.shown + c.segment_blocked + c.site_only + c.hidden; // заведены на сайте
+            const exch = c.shown + c.segment_blocked + c.no_site;   // в листе обзвона 1С
+            const onSite = c.shown + c.segment_blocked;             // из 1С + заведены на сайте
+            const m = STATUS_META;
 
-            let rows = '';
-            STATUS_ORDER.forEach(s => {
-                const m = STATUS_META[s];
-                rows += `
-                <div class="funnel-row" onclick="setActiveStatuses(new Set(['${s}']))" title="Показать только эти">
-                    <span class="funnel-dot" style="background:${m.color}"></span>
-                    <span class="funnel-text">
-                        <span class="fr-label">${m.chip}</span>
-                        <span class="fr-why">${m.why}</span>
-                    </span>
-                    <span class="fr-count" style="color:${m.color}">${c[s]}</span>
+            // Хелпер: безопасно собрать вызов setActiveStatuses (одинарные кавычки внутри)
+            const call = (arr) => `setActiveStatuses(new Set([${arr.map(s => "'" + s + "'").join(',')}]))`;
+
+            const stage = (w, num, name, statuses) =>
+                `<div class="funnel-stage" style="width:${w}" onclick="${call(statuses)}" title="Показать эти акции">
+                    <div class="fs-num">${num}</div>
+                    <div class="fs-name">${name}</div>
                 </div>`;
-            });
+
+            const drop = (status) => {
+                const sm = m[status];
+                return `<div class="funnel-drop" style="border-color:${sm.color};color:${sm.color}" onclick="${call([status])}" title="${sm.why}">
+                    ✂ ${sm.chip} <span class="fd-num">${c[status]}</span>
+                </div>`;
+            };
+
+            const asideRow = (status) => {
+                const sm = m[status];
+                return `<div class="funnel-aside-row" onclick="${call([status])}" title="${sm.why}">
+                    <span class="funnel-dot" style="background:${sm.color}"></span>
+                    <span>${sm.chip} — <span style="color:var(--meta-color)">${sm.why}</span></span>
+                    <b style="margin-left:auto;color:${sm.color}">${c[status]}</b>
+                </div>`;
+            };
+
+            const asideCount = c.site_only + c.hidden;
 
             funnelEl.innerHTML = `
-                <div class="funnel-h">Как формируется подборка</div>
-                <div class="funnel-sources">
-                    <div class="funnel-src">
-                        <div class="src-ico">📞</div>
-                        <div class="src-name">Лист обзвона 1С</div>
-                        <div class="src-sub">по рабочим маркам клиента</div>
-                        <div class="src-num">${exchTotal}</div>
-                    </div>
-                    <div class="funnel-src">
-                        <div class="src-ico">🌐</div>
-                        <div class="src-name">Каталог сайта</div>
-                        <div class="src-sub">контент + сегментация</div>
-                        <div class="src-num">${siteTotal}</div>
-                    </div>
+                <div class="funnel-h">Как отсеиваются акции</div>
+                ${stage('100%', exch, '📞 В листе обзвона 1С (по маркам клиента)', ['shown', 'segment_blocked', 'no_site'])}
+                <div class="funnel-conn"><span class="funnel-arrow">▼</span>${drop('no_site')}</div>
+                ${stage('80%', onSite, '🌐 Заведены и наполнены на сайте', ['shown', 'segment_blocked'])}
+                <div class="funnel-conn"><span class="funnel-arrow">▼</span>${drop('segment_blocked')}</div>
+                <div class="funnel-final" style="width:60%" onclick="${call(['shown'])}" title="Итог: что видит пользователь">
+                    <div class="fs-num" style="color:#34c759">${c.shown}</div>
+                    <div class="fs-name">✅ Видит пользователь</div>
                 </div>
-                <div class="funnel-merge">▼ сопоставление по ID акции и проверка сегмента ▼</div>
-                <div class="funnel-out">${rows}</div>
-                <div class="funnel-result">Пользователь видит: <b style="color:#34c759">${c.shown}</b></div>`;
+                ${asideCount ? `
+                <div class="funnel-aside">
+                    <div class="funnel-aside-h">Есть на сайте, но не в листе обзвона — в персональную выдачу не попадают</div>
+                    ${asideRow('site_only')}
+                    ${asideRow('hidden')}
+                </div>` : ''}`;
             funnelEl.style.display = 'block';
         }
 
