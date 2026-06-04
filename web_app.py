@@ -545,7 +545,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 <div class="funnel-merge">▼ сопоставление по ID акции и проверка сегмента ▼</div>
                 <div class="funnel-out">${rows}</div>
                 <div class="funnel-result">Пользователь видит: <b style="color:#34c759">${c.shown}</b></div>`;
-            funnelEl.style.display = '';
+            funnelEl.style.display = 'block';
         }
 
         function populateDebugControls() {
