@@ -1,4 +1,13 @@
 import logging
+from pathlib import Path
+from dotenv import load_dotenv
+
+# ВАЖНО: грузим .env до импорта web_chat_handler / promo_client —
+# иначе BONUS_API_KEY, BITRIX_API_KEY и др. будут None, и акции/баланс
+# вернут «нет данных» (см. promo_client.get_config).
+env_path = Path(__file__).parent / '.env'
+load_dotenv(dotenv_path=env_path)
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
