@@ -259,16 +259,16 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         }
         .funnel-final { background: rgba(52,199,89,0.12); border: 2px solid #34c759; }
         .funnel-stage:active, .funnel-final:active { transform: scale(0.99); }
-        .funnel-stage .fs-num, .funnel-final .fs-num { font-size: 20px; font-weight: 700; color: var(--text-color); }
-        .funnel-stage .fs-name, .funnel-final .fs-name { font-size: 12px; color: var(--meta-color); margin-top: 2px; }
-        .funnel-conn { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 6px 0; }
-        .funnel-arrow { color: var(--meta-color); font-size: 14px; }
-        .funnel-drop {
-            display: inline-flex; align-items: center; gap: 6px; font-size: 12px;
-            padding: 4px 10px; border-radius: 16px; cursor: pointer;
-            background: var(--bg-color); border: 1px dashed;
+        .funnel-stage .fs-num, .funnel-final .fs-num { font-size: 22px; font-weight: 700; color: var(--text-color); }
+        .funnel-stage .fs-name, .funnel-final .fs-name { font-size: 13px; font-weight: 600; color: var(--text-color); margin-top: 2px; }
+        .funnel-stage .fs-desc, .funnel-final .fs-desc { font-size: 11px; color: var(--meta-color); margin-top: 3px; }
+        .funnel-arrow-v { text-align: center; color: var(--meta-color); font-size: 16px; line-height: 1; margin: 4px 0; }
+        .funnel-cut {
+            margin: 0 auto; border-radius: 10px; padding: 9px 12px; cursor: pointer;
+            background: var(--bg-color); border: 1px dashed; text-align: left;
         }
-        .funnel-drop .fd-num { font-weight: 700; }
+        .funnel-cut .fc-title { font-size: 13px; font-weight: 600; }
+        .funnel-cut .fc-desc { font-size: 11px; color: var(--meta-color); margin-top: 2px; }
         .funnel-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
         .funnel-aside { margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--border-color); }
         .funnel-aside-h { font-size: 11px; color: var(--meta-color); margin-bottom: 8px; text-transform: uppercase; letter-spacing: .5px; }
@@ -515,24 +515,26 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             // Хелпер: безопасно собрать вызов setActiveStatuses (одинарные кавычки внутри)
             const call = (arr) => `setActiveStatuses(new Set([${arr.map(s => "'" + s + "'").join(',')}]))`;
 
-            const stage = (w, num, name, statuses) =>
-                `<div class="funnel-stage" style="width:${w}" onclick="${call(statuses)}" title="Показать эти акции">
+            const stage = (w, num, name, desc, statuses) =>
+                `<div class="funnel-stage" style="width:${w}" onclick="${call(statuses)}" title="Нажмите, чтобы показать эти акции в списке ниже">
                     <div class="fs-num">${num}</div>
                     <div class="fs-name">${name}</div>
+                    <div class="fs-desc">${desc}</div>
                 </div>`;
 
-            const drop = (status) => {
+            const cut = (status, title, desc) => {
                 const sm = m[status];
-                return `<div class="funnel-drop" style="border-color:${sm.color};color:${sm.color}" onclick="${call([status])}" title="${sm.why}">
-                    ✂ ${sm.chip} <span class="fd-num">${c[status]}</span>
+                return `<div class="funnel-cut" style="border-color:${sm.color}" onclick="${call([status])}" title="Нажмите, чтобы показать эти акции в списке ниже">
+                    <div class="fc-title" style="color:${sm.color}">Убрали ${c[status]} ${plural(c[status], 'акцию', 'акции', 'акций')}: ${title}</div>
+                    <div class="fc-desc">${desc}</div>
                 </div>`;
             };
 
-            const asideRow = (status) => {
+            const asideRow = (status, title, desc) => {
                 const sm = m[status];
-                return `<div class="funnel-aside-row" onclick="${call([status])}" title="${sm.why}">
+                return `<div class="funnel-aside-row" onclick="${call([status])}" title="Нажмите, чтобы показать эти акции в списке ниже">
                     <span class="funnel-dot" style="background:${sm.color}"></span>
-                    <span>${sm.chip} — <span style="color:var(--meta-color)">${sm.why}</span></span>
+                    <span>${title} — <span style="color:var(--meta-color)">${desc}</span></span>
                     <b style="margin-left:auto;color:${sm.color}">${c[status]}</b>
                 </div>`;
             };
@@ -540,22 +542,39 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             const asideCount = c.site_only + c.hidden;
 
             funnelEl.innerHTML = `
-                <div class="funnel-h">Как отсеиваются акции</div>
-                ${stage('100%', exch, '📞 В листе обзвона 1С (по маркам клиента)', ['shown', 'segment_blocked', 'no_site'])}
-                <div class="funnel-conn"><span class="funnel-arrow">▼</span>${drop('no_site')}</div>
-                ${stage('80%', onSite, '🌐 Заведены и наполнены на сайте', ['shown', 'segment_blocked'])}
-                <div class="funnel-conn"><span class="funnel-arrow">▼</span>${drop('segment_blocked')}</div>
-                <div class="funnel-final" style="width:60%" onclick="${call(['shown'])}" title="Итог: что видит пользователь">
+                <div class="funnel-h">Как отбираются акции для клиента</div>
+                ${stage('100%', exch, 'Шаг 1. Акции из листа обзвона 1С',
+                    'Подобраны в 1С по рабочим маркам клиента', ['shown', 'segment_blocked', 'no_site'])}
+                <div class="funnel-arrow-v">↓</div>
+                ${cut('no_site', 'которых нет на сайте',
+                    'Для этих акций на сайте не завели баннер и описание — клиенту нечего показать')}
+                <div class="funnel-arrow-v">↓</div>
+                ${stage('86%', onSite, 'Шаг 2. Остались акции, заведённые на сайте',
+                    'У них есть баннер и описание для показа', ['shown', 'segment_blocked'])}
+                <div class="funnel-arrow-v">↓</div>
+                ${cut('segment_blocked', 'закрытые сегментом на сайте',
+                    'На сайте акция показывается только своей группе клиентов, а этот клиент в неё не входит')}
+                <div class="funnel-arrow-v">↓</div>
+                <div class="funnel-final" style="width:72%" onclick="${call(['shown'])}" title="Нажмите, чтобы показать эти акции в списке ниже">
                     <div class="fs-num" style="color:#34c759">${c.shown}</div>
-                    <div class="fs-name">✅ Видит пользователь</div>
+                    <div class="fs-name">Итог: эти акции увидит клиент</div>
+                    <div class="fs-desc">Есть в листе обзвона, заведены на сайте и сегмент подходит</div>
                 </div>
                 ${asideCount ? `
                 <div class="funnel-aside">
-                    <div class="funnel-aside-h">Есть на сайте, но не в листе обзвона — в персональную выдачу не попадают</div>
-                    ${asideRow('site_only')}
-                    ${asideRow('hidden')}
+                    <div class="funnel-aside-h">Дополнительно: есть на сайте, но НЕ в листе обзвона 1С — клиенту не показываются</div>
+                    ${asideRow('site_only', 'Только на сайте', 'есть на сайте, но клиента нет в листе обзвона по этой акции')}
+                    ${asideRow('hidden', 'Скрыта полностью', 'нет в листе обзвона и сегмент на сайте чужой')}
                 </div>` : ''}`;
             funnelEl.style.display = 'block';
+        }
+
+        // Склонение существительного: plural(2,'акцию','акции','акций') → 'акции'
+        function plural(n, one, few, many) {
+            const n10 = n % 10, n100 = n % 100;
+            if (n10 === 1 && n100 !== 11) return one;
+            if (n10 >= 2 && n10 <= 4 && (n100 < 10 || n100 >= 20)) return few;
+            return many;
         }
 
         function populateDebugControls() {
