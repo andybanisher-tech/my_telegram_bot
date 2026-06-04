@@ -228,6 +228,56 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             font-size: 12px; color: var(--button-bg); cursor: pointer;
             padding: 4px 0; text-decoration: underline; white-space: nowrap;
         }
+        /* ── Поле ввода ID контрагента ── */
+        .partner-input-row { display: flex; gap: 8px; margin-bottom: 8px; }
+        .partner-input {
+            flex: 1; padding: 9px 13px; border-radius: 12px;
+            border: 1px solid var(--border-color); background: var(--card-bg);
+            color: var(--text-color); font-size: 14px; outline: none;
+        }
+        .partner-input:focus { border-color: var(--button-bg); }
+        .partner-load {
+            padding: 9px 16px; border: none; border-radius: 12px;
+            background: var(--button-bg); color: #fff; font-size: 14px;
+            font-weight: 600; cursor: pointer; white-space: nowrap;
+        }
+        .partner-load:hover { background: var(--button-hover); }
+        /* ── Воронка отбора ── */
+        .debug-funnel {
+            max-width: 550px; margin: 0 auto 16px; display: none;
+            background: var(--card-bg); border: 1px solid var(--border-color);
+            border-radius: 16px; padding: 16px;
+        }
+        .funnel-h {
+            font-size: 12px; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.5px; color: var(--meta-color); margin-bottom: 10px;
+        }
+        .funnel-sources { display: flex; gap: 10px; }
+        .funnel-src {
+            flex: 1; border: 1px solid var(--border-color); border-radius: 12px;
+            padding: 10px; text-align: center; background: var(--brand-bg);
+        }
+        .funnel-src .src-ico { font-size: 20px; }
+        .funnel-src .src-name { font-size: 12px; font-weight: 600; margin: 4px 0 2px; color: var(--text-color); }
+        .funnel-src .src-sub { font-size: 11px; color: var(--meta-color); }
+        .funnel-src .src-num { font-size: 18px; font-weight: 700; margin-top: 4px; color: var(--text-color); }
+        .funnel-merge { text-align: center; font-size: 11px; color: var(--meta-color); margin: 8px 0; }
+        .funnel-out { display: flex; flex-direction: column; gap: 6px; }
+        .funnel-row {
+            display: flex; align-items: center; gap: 10px; padding: 8px 10px;
+            border-radius: 10px; cursor: pointer; border: 1px solid var(--border-color);
+            background: var(--bg-color);
+        }
+        .funnel-row:active { transform: scale(0.99); }
+        .funnel-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+        .funnel-text { display: flex; flex-direction: column; }
+        .funnel-text .fr-label { font-size: 13px; font-weight: 600; color: var(--text-color); }
+        .funnel-text .fr-why { font-size: 11px; color: var(--meta-color); }
+        .funnel-row .fr-count { margin-left: auto; font-size: 16px; font-weight: 700; }
+        .funnel-result {
+            text-align: center; font-size: 13px; color: var(--text-color);
+            margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border-color);
+        }
         .footer { text-align: center; font-size: 12px; color: var(--meta-color); margin-top: 30px; }
         @media (max-width: 480px) { body { padding: 12px; } .promo-card { padding: 16px; } .promo-title { font-size: 18px; } }
     </style>
@@ -235,7 +285,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <body>
     <div id="debug-filters" class="debug-filters" style="display:none">
         <div style="max-width:550px;margin:0 auto">
-            <input type="text" id="filter-search" class="filter-search" placeholder="ID акции, название, ID сегмента…">
+            <div class="partner-input-row">
+                <input type="text" id="partner-input" class="partner-input" placeholder="ID контрагента, напр. Т0063393">
+                <button type="button" id="partner-load" class="partner-load">Загрузить</button>
+            </div>
+            <input type="text" id="filter-search" class="filter-search" placeholder="Поиск: ID акции, название, ID сегмента…">
             <div class="filter-row">
                 <select id="filter-brand" class="filter-select"><option value="">Все марки</option></select>
                 <span id="filter-count" class="filter-count"></span>
@@ -244,6 +298,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             <div class="status-chips" id="status-chips"></div>
         </div>
     </div>
+    <div id="debug-funnel" class="debug-funnel"></div>
     <div class="container" id="content"></div>
     <div class="footer">Stalker-Co — всё для профессионалов</div>
     <script>
@@ -314,25 +369,35 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             try { partnerName = decodeURIComponent(partnerName); } catch(e) {}
         }
 
-        let dataUrl = window.location.pathname + '/data' + (brandFilter ? `?brand=${brandFilter}` : '');
-        if (debugMode) dataUrl += (brandFilter ? '&' : '?') + 'debug=1';
-        else if (allMode) dataUrl += (brandFilter ? '&' : '?') + 'all=1';
+        // URL данных строится в buildDataUrl(pid): id берётся из пути либо из поля ввода (debug).
 
         const STATUS_META = {
-            'shown':           { label: 'label-shown',           text: '✅ Показывается',                      chip: 'Показывается',          card: 'promo-card' },
-            'site_only':       { label: 'label-site-only',       text: '🌐 Есть на сайте, нет в 1С', chip: 'Только на сайте',       card: 'promo-card site-only' },
-            'segment_blocked': { label: 'label-segment-blocked', text: '🔒 Заблокирована сегментом',            chip: 'Блок по сегменту',      card: 'promo-card segment-blocked' },
-            'no_site':         { label: 'label-no-site',         text: '⚠️ Есть в 1С, нет на сайте', chip: 'Только в 1С', card: 'promo-card warning' },
-            'hidden':          { label: 'label-hidden',          text: '👻 Вне сегмента и нет в 1С',  chip: 'Скрыта полностью',      card: 'promo-card hidden-card' },
+            'shown':           { label: 'label-shown',           text: '✅ Показывается',            chip: 'Показывается',     why: 'в листе обзвона 1С и сегмент подходит', card: 'promo-card',                 color: '#34c759' },
+            'site_only':       { label: 'label-site-only',       text: '🌐 Есть на сайте, нет в 1С', chip: 'Только на сайте',  why: 'есть на сайте, но нет в листе обзвона', card: 'promo-card site-only',       color: '#007aff' },
+            'segment_blocked': { label: 'label-segment-blocked', text: '🔒 Заблокирована сегментом', chip: 'Блок по сегменту', why: 'в листе 1С, но сегмент сайта чужой',    card: 'promo-card segment-blocked', color: '#ff9500' },
+            'no_site':         { label: 'label-no-site',         text: '⚠️ Есть в 1С, нет на сайте', chip: 'Только в 1С',      why: 'в листе 1С, но на сайте не заведена',   card: 'promo-card warning',         color: '#ff3b30' },
+            'hidden':          { label: 'label-hidden',          text: '👻 Вне сегмента и нет в 1С', chip: 'Скрыта полностью', why: 'нет в листе 1С и сегмент чужой',        card: 'promo-card hidden-card',     color: '#8e8e93' },
         };
         const STATUS_ORDER = ['shown', 'site_only', 'segment_blocked', 'no_site', 'hidden'];
-        const STATUS_COLORS = {
-            'shown': '#34c759', 'site_only': '#007aff',
-            'segment_blocked': '#ff9500', 'no_site': '#ff3b30', 'hidden': '#8e8e93'
-        };
 
         let allPromotions = [];
         let activeStatuses = new Set(STATUS_ORDER);
+        let currentPartnerId = partnerId || '';
+        let debugUiReady = false;
+
+        function buildDataUrl(pid) {
+            let url = '/promo/' + encodeURIComponent(pid) + '/data';
+            const params = [];
+            if (brandFilter) params.push('brand=' + encodeURIComponent(brandFilter));
+            if (debugMode) params.push('debug=1');
+            else if (allMode) params.push('all=1');
+            if (params.length) url += '?' + params.join('&');
+            return url;
+        }
+
+        function infoBox(text) {
+            return `<div style="background: var(--card-bg); border-radius: 20px; padding: 40px 20px; text-align: center;">${text}</div>`;
+        }
 
         function renderPromo(promo) {
             const status = promo.debug_status || 'shown';
@@ -383,9 +448,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             });
 
             const container = document.getElementById('content');
+            const countEl = document.getElementById('filter-count');
             if (!filtered.length) {
-                container.innerHTML = `<div style="background:var(--card-bg);border-radius:20px;padding:40px 20px;text-align:center;">Ничего не найдено</div>`;
-                document.getElementById('filter-count').textContent = '0 из ' + allPromotions.length;
+                container.innerHTML = infoBox('Ничего не найдено');
+                if (countEl) countEl.textContent = '0 из ' + allPromotions.length;
                 return;
             }
 
@@ -393,18 +459,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 const groups = {};
                 STATUS_ORDER.forEach(s => { groups[s] = []; });
                 filtered.forEach(p => { (groups[p.debug_status || 'shown'] || groups['shown']).push(p); });
-                // Count by status across ALL data (not just filtered) for chip labels
-                const totalByStatus = {};
-                STATUS_ORDER.forEach(s => { totalByStatus[s] = 0; });
-                allPromotions.forEach(p => { totalByStatus[p.debug_status || 'shown']++; });
-                // Update chip counts
-                STATUS_ORDER.forEach(s => {
-                    const chip = document.getElementById('chip-' + s);
-                    if (chip) {
-                        const cnt = groups[s].length;
-                        chip.querySelector('.chip-count').textContent = cnt;
-                    }
-                });
 
                 const sectionTitles = {
                     'shown':           '✅ Показываются',
@@ -425,74 +479,157 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 container.innerHTML = filtered.map(renderPromo).join('');
             }
 
-            document.getElementById('filter-count').textContent = filtered.length + ' из ' + allPromotions.length;
+            if (countEl) countEl.textContent = filtered.length + ' из ' + allPromotions.length;
         }
 
-        function initDebugFilters() {
-            document.getElementById('debug-filters').style.display = '';
+        function syncChips() {
+            STATUS_ORDER.forEach(s => {
+                const chip = document.getElementById('chip-' + s);
+                if (!chip) return;
+                chip.classList.replace(activeStatuses.has(s) ? 'off' : 'on', activeStatuses.has(s) ? 'on' : 'off');
+            });
+        }
 
-            // Brand dropdown
-            const marks = [...new Set(allPromotions.map(p => p.mark).filter(Boolean))].sort();
+        // Глобально — чтобы вызывать из onclick строк воронки
+        function setActiveStatuses(set) {
+            activeStatuses = set;
+            syncChips();
+            applyFilters();
+            const c = document.getElementById('content');
+            if (c) c.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+        window.setActiveStatuses = setActiveStatuses;
+
+        function renderFunnel() {
+            const funnelEl = document.getElementById('debug-funnel');
+            if (!funnelEl) return;
+            if (!allPromotions.length) { funnelEl.style.display = 'none'; return; }
+
+            const c = {};
+            STATUS_ORDER.forEach(s => { c[s] = 0; });
+            allPromotions.forEach(p => { c[p.debug_status || 'shown'] = (c[p.debug_status || 'shown'] || 0) + 1; });
+
+            const exchTotal = c.shown + c.segment_blocked + c.no_site;   // пришли из листа обзвона 1С
+            const siteTotal = c.shown + c.segment_blocked + c.site_only + c.hidden; // заведены на сайте
+
+            let rows = '';
+            STATUS_ORDER.forEach(s => {
+                const m = STATUS_META[s];
+                rows += `
+                <div class="funnel-row" onclick="setActiveStatuses(new Set(['${s}']))" title="Показать только эти">
+                    <span class="funnel-dot" style="background:${m.color}"></span>
+                    <span class="funnel-text">
+                        <span class="fr-label">${m.chip}</span>
+                        <span class="fr-why">${m.why}</span>
+                    </span>
+                    <span class="fr-count" style="color:${m.color}">${c[s]}</span>
+                </div>`;
+            });
+
+            funnelEl.innerHTML = `
+                <div class="funnel-h">Как формируется подборка</div>
+                <div class="funnel-sources">
+                    <div class="funnel-src">
+                        <div class="src-ico">📞</div>
+                        <div class="src-name">Лист обзвона 1С</div>
+                        <div class="src-sub">по рабочим маркам клиента</div>
+                        <div class="src-num">${exchTotal}</div>
+                    </div>
+                    <div class="funnel-src">
+                        <div class="src-ico">🌐</div>
+                        <div class="src-name">Каталог сайта</div>
+                        <div class="src-sub">контент + сегментация</div>
+                        <div class="src-num">${siteTotal}</div>
+                    </div>
+                </div>
+                <div class="funnel-merge">▼ сопоставление по ID акции и проверка сегмента ▼</div>
+                <div class="funnel-out">${rows}</div>
+                <div class="funnel-result">Пользователь видит: <b style="color:#34c759">${c.shown}</b></div>`;
+            funnelEl.style.display = '';
+        }
+
+        function populateDebugControls() {
+            // Список марок
             const sel = document.getElementById('filter-brand');
-            marks.forEach(m => {
+            const prev = sel.value;
+            sel.innerHTML = '<option value="">Все марки</option>';
+            [...new Set(allPromotions.map(p => p.mark).filter(Boolean))].sort().forEach(m => {
                 const opt = document.createElement('option');
                 opt.value = m; opt.textContent = m;
                 sel.appendChild(opt);
             });
+            if ([...sel.options].some(o => o.value === prev)) sel.value = prev;
 
-            // Status chips
+            // Чипы статусов (счётчики — по всем данным)
+            activeStatuses = new Set(STATUS_ORDER);
             const chipsEl = document.getElementById('status-chips');
+            chipsEl.innerHTML = '';
             STATUS_ORDER.forEach(s => {
                 const count = allPromotions.filter(p => (p.debug_status || 'shown') === s).length;
                 if (!count) return;
+                const m = STATUS_META[s];
                 const chip = document.createElement('span');
                 chip.className = 'status-chip on';
                 chip.id = 'chip-' + s;
-                chip.style.background = STATUS_COLORS[s];
+                chip.style.background = m.color;
                 chip.style.color = 'white';
-                chip.innerHTML = `${STATUS_META[s].chip} <span class="chip-count">${count}</span>`;
+                chip.innerHTML = `${m.chip} <span class="chip-count">${count}</span>`;
                 chip.addEventListener('click', () => {
-                    if (activeStatuses.has(s)) {
-                        activeStatuses.delete(s);
-                        chip.classList.replace('on', 'off');
-                    } else {
-                        activeStatuses.add(s);
-                        chip.classList.replace('off', 'on');
-                    }
+                    if (activeStatuses.has(s)) { activeStatuses.delete(s); chip.classList.replace('on', 'off'); }
+                    else { activeStatuses.add(s); chip.classList.replace('off', 'on'); }
                     applyFilters();
                 });
                 chipsEl.appendChild(chip);
             });
+        }
 
+        function setupDebugUiOnce() {
+            if (debugUiReady) return;
+            debugUiReady = true;
+            document.getElementById('debug-filters').style.display = '';
+            const pInput = document.getElementById('partner-input');
+            pInput.value = currentPartnerId || '';
+            const doLoad = () => {
+                const v = pInput.value.trim();
+                if (!v) { document.getElementById('content').innerHTML = infoBox('Введите ID контрагента.'); return; }
+                currentPartnerId = v;
+                try { history.replaceState(null, '', '/promo/' + encodeURIComponent(v) + '?debug=1'); } catch (e) {}
+                loadData(v);
+            };
+            document.getElementById('partner-load').addEventListener('click', doLoad);
+            pInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); doLoad(); } });
             document.getElementById('filter-search').addEventListener('input', applyFilters);
             document.getElementById('filter-brand').addEventListener('change', applyFilters);
             document.getElementById('filter-reset').addEventListener('click', () => {
                 document.getElementById('filter-search').value = '';
                 document.getElementById('filter-brand').value = '';
-                activeStatuses = new Set(STATUS_ORDER);
-                document.querySelectorAll('.status-chip').forEach(c => c.classList.replace('off', 'on'));
-                applyFilters();
+                setActiveStatuses(new Set(STATUS_ORDER));
             });
         }
 
-        fetch(dataUrl)
-            .then(response => response.json())
-            .then(data => {
-                const container = document.getElementById('content');
-                if (data.promotions && data.promotions.length) {
-                    allPromotions = data.promotions;
-                    if (debugMode) {
-                        initDebugFilters();
+        function loadData(pid) {
+            const container = document.getElementById('content');
+            if (!pid) { container.innerHTML = infoBox('Введите ID контрагента и нажмите «Загрузить».'); return; }
+            container.innerHTML = infoBox('Загрузка…');
+            fetch(buildDataUrl(pid))
+                .then(response => response.json())
+                .then(data => {
+                    allPromotions = (data && data.promotions) ? data.promotions : [];
+                    if (debugMode) { populateDebugControls(); renderFunnel(); }
+                    if (allPromotions.length) {
+                        applyFilters();
+                    } else {
+                        container.innerHTML = infoBox('На данный момент нет активных акций');
                     }
-                    applyFilters();
-                } else {
-                    container.innerHTML = `<div style="background: var(--card-bg); border-radius: 20px; padding: 40px 20px; text-align: center;">На данный момент нет активных акций</div>`;
-                }
-            })
-            .catch(error => {
-                console.error('Ошибка загрузки акций:', error);
-                document.getElementById('content').innerHTML = `<div style="background: var(--card-bg); border-radius: 20px; padding: 40px 20px; text-align: center;">Ошибка загрузки акций. Попробуйте позже.</div>`;
-            });
+                })
+                .catch(error => {
+                    console.error('Ошибка загрузки акций:', error);
+                    container.innerHTML = infoBox('Ошибка загрузки акций. Попробуйте позже.');
+                });
+        }
+
+        if (debugMode) setupDebugUiOnce();
+        loadData(currentPartnerId);
     </script>
 </body>
 </html>
@@ -500,6 +637,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
 @app.route('/promo/<partner_code>')
 def promo_page(partner_code):
+    return render_template_string(HTML_TEMPLATE)
+
+@app.route('/promo/')
+def promo_page_empty():
+    # Вход без кода в URL: код вводится в поле на странице (актуально для ?debug=1).
     return render_template_string(HTML_TEMPLATE)
 
 # ... остальные маршруты (/click, /promo/.../data, /health, /tg) остаются без изменений. 
