@@ -20,6 +20,7 @@ def parse_banner(banner: Dict[str, Any]) -> Dict[str, Any]:
         "promo_code": banner.get("promo_code"),
         "brand": banner.get("brand"),
         "segment_match": banner.get("segment_match", True),
+        "active_now": banner.get("active_now", True),
         "banner_segments": banner.get("banner_segments", []),
         "name": banner.get("name"),
         "description": banner.get("description"),
@@ -76,7 +77,7 @@ def get_banners_all_sync(company_code: str) -> Optional[List[Dict[str, Any]]]:
     if not config["api_key"]:
         logger.error("BITRIX_API_KEY не задан в .env")
         return None
-    params = {"key": config["api_key"], "code": company_code, "no_segment": "1"}
+    params = {"key": config["api_key"], "code": company_code, "no_segment": "1", "include_inactive": "1"}
     try:
         response = requests.get(BITRIX_API_URL, params=params, timeout=30)
         logger.info(f"Bitrix API all (sync) ответ: статус {response.status_code}")

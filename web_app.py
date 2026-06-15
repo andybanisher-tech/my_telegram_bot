@@ -167,7 +167,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         .label-site-only { background: var(--site-only-text); color: white; }
         .label-segment-blocked { background: var(--segment-text); color: white; }
         .label-no-site { background: #ff9500; color: white; }
+        .label-expired { background: #af52de; color: white; }
         .label-hidden { background: var(--hidden-text); color: white; }
+        .promo-card.expired-card { background: rgba(175,82,222,0.10); border-color: #af52de; }
         .debug-meta { font-size: 12px; margin-top: 8px; opacity: 0.7; font-family: monospace; }
         .debug-section-header {
             font-size: 13px;
@@ -374,10 +376,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             'shown':           { label: 'label-shown',           text: '✅ Показывается',            chip: 'Показывается',     why: 'в листе обзвона 1С и сегмент подходит', card: 'promo-card',                 color: '#34c759' },
             'site_only':       { label: 'label-site-only',       text: '🌐 Есть на сайте, нет в листе обзвона 1С', chip: 'Только на сайте',  why: 'есть на сайте, но нет в листе обзвона', card: 'promo-card site-only',       color: '#007aff' },
             'segment_blocked': { label: 'label-segment-blocked', text: '🔒 Заблокирована сегментом', chip: 'Блок по сегменту', why: 'в листе 1С, но сегмент сайта чужой',    card: 'promo-card segment-blocked', color: '#ff9500' },
+            'expired':         { label: 'label-expired',         text: '🕒 Срок на сайте истёк',     chip: 'Срок истёк',       why: 'есть на сайте, но срок действия закончился', card: 'promo-card expired-card', color: '#af52de' },
             'no_site':         { label: 'label-no-site',         text: '⚠️ Есть в листе обзвона 1С, нет на сайте', chip: 'Только в 1С',      why: 'в листе 1С, но на сайте не заведена',   card: 'promo-card warning',         color: '#ff3b30' },
             'hidden':          { label: 'label-hidden',          text: '👻 Вне сегмента и нет в листе обзвона 1С', chip: 'Скрыта полностью', why: 'нет в листе 1С и сегмент чужой',        card: 'promo-card hidden-card',     color: '#8e8e93' },
         };
-        const STATUS_ORDER = ['shown', 'site_only', 'segment_blocked', 'no_site', 'hidden'];
+        const STATUS_ORDER = ['shown', 'site_only', 'segment_blocked', 'expired', 'no_site', 'hidden'];
 
         let allPromotions = [];
         let activeStatuses = new Set(STATUS_ORDER);
@@ -463,6 +466,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     'shown':           '✅ Показываются',
                     'site_only':       '🌐 Есть на сайте, нет в листе обзвона 1С',
                     'segment_blocked': '🔒 Заблокированы сегментом',
+                    'expired':         '🕒 Срок на сайте истёк',
                     'no_site':         '⚠️ Есть в листе обзвона 1С, нет на сайте',
                     'hidden':          '👻 Вне сегмента и нет в листе обзвона 1С',
                 };
@@ -508,8 +512,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             STATUS_ORDER.forEach(s => { c[s] = 0; });
             allPromotions.forEach(p => { c[p.debug_status || 'shown'] = (c[p.debug_status || 'shown'] || 0) + 1; });
 
-            const exch = c.shown + c.segment_blocked + c.no_site;   // в листе обзвона 1С
-            const onSite = c.shown + c.segment_blocked;             // из 1С + заведены на сайте
+            const exch = c.shown + c.segment_blocked + c.expired + c.no_site;  // в листе обзвона 1С
+            const onSite = c.shown + c.segment_blocked;                        // из 1С + активны на сайте
             const m = STATUS_META;
 
             // Хелпер: безопасно собрать вызов setActiveStatuses (одинарные кавычки внутри)
@@ -541,31 +545,38 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
             const asideCount = c.site_only + c.hidden;
 
-            funnelEl.innerHTML = `
-                <div class="funnel-h">Как отбираются акции для клиента</div>
-                ${stage('100%', exch, 'Шаг 1. Акции из листа обзвона 1С',
-                    'Подобраны в 1С по рабочим маркам клиента', ['shown', 'segment_blocked', 'no_site'])}
-                <div class="funnel-arrow-v">↓</div>
-                ${cut('no_site', 'которых нет на сайте',
-                    'Для этих акций на сайте не завели баннер и описание — клиенту нечего показать')}
-                <div class="funnel-arrow-v">↓</div>
-                ${stage('86%', onSite, 'Шаг 2. Остались акции, заведённые на сайте',
-                    'У них есть баннер и описание для показа', ['shown', 'segment_blocked'])}
-                <div class="funnel-arrow-v">↓</div>
-                ${cut('segment_blocked', 'закрытые сегментом на сайте',
-                    'На сайте акция показывается только своей группе клиентов, а этот клиент в неё не входит')}
-                <div class="funnel-arrow-v">↓</div>
-                <div class="funnel-final" style="width:72%" onclick="${call(['shown'])}" title="Нажмите, чтобы показать эти акции в списке ниже">
+            const finalHtml = `<div class="funnel-final" style="width:72%" onclick="${call(['shown'])}" title="Нажмите, чтобы показать эти акции в списке ниже">
                     <div class="fs-num" style="color:#34c759">${c.shown}</div>
                     <div class="fs-name">Итог: эти акции увидит клиент</div>
                     <div class="fs-desc">Есть в листе обзвона, заведены на сайте и сегмент подходит</div>
-                </div>
-                ${asideCount ? `
-                <div class="funnel-aside">
+                </div>`;
+
+            // Этапы воронки. Отсевы с нулём не показываем, чтобы не путать.
+            const parts = [];
+            parts.push(stage('100%', exch, 'Шаг 1. Акции из листа обзвона 1С',
+                'Подобраны в 1С по рабочим маркам клиента', ['shown', 'segment_blocked', 'expired', 'no_site']));
+            if (c.no_site) parts.push(cut('no_site', 'которых нет на сайте',
+                'Для этих акций на сайте не завели баннер и описание — клиенту нечего показать'));
+            if (c.expired) parts.push(cut('expired', 'у которых истёк срок на сайте',
+                'Акция есть на сайте, но срок её действия уже закончился — нужно продлить даты на сайте'));
+            parts.push(stage('86%', onSite, 'Шаг 2. Остались акции, активные на сайте',
+                'У них есть баннер, описание и действующий срок', ['shown', 'segment_blocked']));
+            if (c.segment_blocked) parts.push(cut('segment_blocked', 'закрытые сегментом на сайте',
+                'На сайте акция показывается только своей группе клиентов, а этот клиент в неё не входит'));
+            parts.push(finalHtml);
+
+            const arrow = '<div class="funnel-arrow-v">↓</div>';
+            let aside = '';
+            if (asideCount) {
+                aside = `<div class="funnel-aside">
                     <div class="funnel-aside-h">Дополнительно: есть на сайте, но НЕ в листе обзвона 1С — клиенту не показываются</div>
                     ${asideRow('site_only', 'Только на сайте', 'есть на сайте, но клиента нет в листе обзвона по этой акции')}
                     ${asideRow('hidden', 'Скрыта полностью', 'нет в листе обзвона и сегмент на сайте чужой')}
-                </div>` : ''}`;
+                </div>`;
+            }
+
+            funnelEl.innerHTML = `<div class="funnel-h">Как отбираются акции для клиента</div>`
+                + parts.join(arrow) + aside;
             funnelEl.style.display = 'block';
         }
 
@@ -750,6 +761,7 @@ def promo_data(partner_code):
             promo_code_raw = banner.get('promo_code') or ''
             promo_codes = [p.strip() for p in str(promo_code_raw).split(',') if p.strip()]
             segment_match = banner.get('segment_match', True)
+            active_now = banner.get('active_now', True)
 
             matched_promo = None
             matched_id = None
@@ -760,17 +772,24 @@ def promo_data(partner_code):
                     break
 
             in_exchange = matched_promo is not None
-            if in_exchange:
-                matched_exchange_ids.add(matched_id)
 
-            if in_exchange and segment_match:
-                status = 'shown'
-            elif in_exchange and not segment_match:
-                status = 'segment_blocked'
-            elif not in_exchange and segment_match:
-                status = 'site_only'
+            if not active_now:
+                # Просроченный/неактивный баннер на сайте.
+                if not in_exchange:
+                    continue  # не из листа обзвона — для разбора не нужен
+                matched_exchange_ids.add(matched_id)
+                status = 'expired'
             else:
-                status = 'hidden'
+                if in_exchange:
+                    matched_exchange_ids.add(matched_id)
+                if in_exchange and segment_match:
+                    status = 'shown'
+                elif in_exchange and not segment_match:
+                    status = 'segment_blocked'
+                elif not in_exchange and segment_match:
+                    status = 'site_only'
+                else:
+                    status = 'hidden'
 
             if brand_filter and matched_promo:
                 if matched_promo.get('mark', '').lower() != brand_filter.lower():
@@ -785,7 +804,8 @@ def promo_data(partner_code):
                 'image': clean_text(banner.get('image')),
                 'link': clean_text(banner.get('link')),
                 'mark': clean_text(matched_promo.get('mark', '') if matched_promo else '') or clean_text(banner.get('brand', '') or ''),
-                'date_to': clean_text(matched_promo.get('date_to', '')) if matched_promo else '',
+                # для просроченных показываем дату окончания с сайта (когда истекла)
+                'date_to': clean_text(banner.get('date_to', '')) if not active_now else (clean_text(matched_promo.get('date_to', '')) if matched_promo else ''),
                 'details_missing': False,
                 'debug_status': status,
             })
@@ -810,7 +830,7 @@ def promo_data(partner_code):
                 'debug_status': 'no_site',
             })
 
-        status_order = ['shown', 'site_only', 'segment_blocked', 'no_site', 'hidden']
+        status_order = ['shown', 'site_only', 'segment_blocked', 'expired', 'no_site', 'hidden']
         enriched.sort(key=lambda x: status_order.index(x.get('debug_status', 'shown')))
         return jsonify({"promotions": enriched})
 
